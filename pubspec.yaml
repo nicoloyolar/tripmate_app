@@ -1,0 +1,42 @@
+name: tripmate_app
+description: "A new Flutter project."
+publish_to: 'none' 
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  intl: ^0.20.2
+  flutter_localizations:
+    sdk: flutter
+  firebase_core: ^4.6.0
+  cloud_firestore: ^6.2.0
+  firebase_auth: ^6.3.0
+  firebase_storage: ^13.2.0
+  image_picker: ^1.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+
+  uses-material-design: true
+  assets:
+    - assets/logo_tripmate.png
+    - assets/background-image-trip-mate.jpeg
+
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: true
+  image_path: "assets/logo_tripmate.png"
+  adaptive_icon_background: "#1A4371" 
+  adaptive_icon_foreground: "assets/logo_tripmate.png"

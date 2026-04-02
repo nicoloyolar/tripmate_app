@@ -1,0 +1,25 @@
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Android
+.gradle/
+local.properties
+*.kwks
+*.keystore
+app/google-services.json
+
+# iOS
+*.podspec
+Pods/
+Runner.xcworkspace/
+google-services-info.plist
+
+# Otros
+.DS_Store
+.env

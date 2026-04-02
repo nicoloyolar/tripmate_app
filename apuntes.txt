@@ -1,0 +1,67 @@
+- fecha de nacimiento
+
+    - solo para mayores de 18 años ✅
+
+- validación del conductor
+
+    - vehículo
+
+        - patente ✅
+        - marca ✅
+        - modelo ✅
+        - año
+        - color ✅
+        - licencia de conductor
+        - foto del vehículo 
+        - SOAP
+        - certificado de antecedentes 
+
+- integrar permisos de ubicación tanto para el conductor como para el pasajero
+
+- integrar saludo en 'HOME' ✅
+- integrar datos de usuario en 'PERFIL' ✅
+
+- ocultar los viajes del mismo usuario al momento de buscar viajes ✅
+- integrar nombre de conductor en la tarjeta de viaje ✅
+- integrar nombre de conductor en el detalle del viaje ✅
+- mejorar pantalla de ruta del viaje ✅
+- integrar asientos disponibles ✅
+- integrar sistema de reserva de asientos ✅
+
+    - descontar asiento ✅
+    - reserva con campo de estado ✅
+    - cancelación ✅
+
+- integrar fecha y hora del viaje ✅
+- optimizar formulario de publicar viaje ✅
+- integrar 'editar perfil' (definir campos a editar)
+
+    - foto usuario 
+
+- integrar formateo a pesos chilenos ✅
+- los viajes sin cupos deberían desaparecer ✅
+- integrar otros pasajeros en la pantalla de detalle del viaje 
+- integrar logo en la instalación de la aplicación móvil ✅
+- integrar splash screen / animación del logo ✅
+
+- estados de reserva 
+
+    - pasajero ✅
+
+        - pendiente ✅
+        - completado ✅
+        - cancelado ✅
+
+- un pasajero puede pedir más de un cupo ✅
+- se debe definir claramente que sucederá en este caso
+
+    - se podría solicitar nombre y rut del acompañante
+    - se podría invitar o agregar al pasajero desde otra cuenta
+    - al agregar un segundo cupo, que se muestren campos para ingresar como acompañante
+
+- integrar caja de comentarios para solicitar la reserva ✅
+
+- para realizar pruebas, se recomienda tener una cuenta que solo publique viajes y otra que solo acepte ✅
+- luego, extender el sistema para que varias personas
+
+- cambiar nombre del icono de la aplicación instalada 
