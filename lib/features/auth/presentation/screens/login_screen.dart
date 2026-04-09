@@ -1,3 +1,5 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:tripmate_app/features/auth/presentation/screens/complete_profile_screen.dart';
@@ -14,6 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -75,7 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ), 
 
-              const SizedBox(height: 40), 
+              const SizedBox(height: 20), 
 
               _buildTextField(
                 controller: _emailController,
@@ -83,7 +86,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 icon: Icons.email_outlined,
               ),
               
-              const SizedBox(height: 20),
+              const SizedBox(height: 10),
 
               _buildTextField(
                 controller: _passwordController,
@@ -92,7 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 isPassword: true,
               ),
 
-              const SizedBox(height: 30),
+              const SizedBox(height: 10),
 
               SizedBox(
                 width: double.infinity,
@@ -113,6 +116,45 @@ class _LoginScreenState extends State<LoginScreen> {
 
               const SizedBox(height: 20),
 
+              Row(
+                children: [
+                  Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      "O inicia sesión con",
+                      style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                  Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+                ],
+              ),
+
+              const SizedBox(height: 25),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  _buildSocialCircle(
+                    icon: Icons.g_mobiledata_rounded, 
+                    color: Colors.red.shade700,
+                    onTap: () => {},
+                  ),
+                  const SizedBox(width: 25),
+                  _buildSocialCircle(
+                    icon: Icons.facebook,
+                    color: const Color(0xFF1877F2),
+                    onTap: () => {},
+                  ),
+                  const SizedBox(width: 25),
+                  _buildSocialCircle(
+                    icon: Icons.apple,
+                    color: Colors.black,
+                    onTap: () => {},
+                  ),
+                ],
+              ),
+
               TextButton(
                 onPressed: () {
                   Navigator.push(
@@ -122,7 +164,19 @@ class _LoginScreenState extends State<LoginScreen> {
                 },
                 child: const Text(
                   "¿No tienes cuenta? Regístrate",
-                  style: TextStyle(color: Color(0xFF2BB8D1), fontWeight: FontWeight.w600),
+                  style: TextStyle(color: Color(0xFF2BB8D1), fontWeight: FontWeight.w600, fontSize: 16,),
+                ),
+              ),
+
+              TextButton(
+                onPressed: _resetearPassword,
+                child: const Text(
+                  "¿Olvidaste tu contraseña?",
+                  style: TextStyle(
+                    color: Color(0xFF2BB8D1), 
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
                 ),
               ),
             ],
@@ -134,21 +188,125 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildTextField({
     required TextEditingController controller,
-    required String hint, 
-    required IconData icon, 
-    bool isPassword = false
+    required String hint,
+    required IconData icon,
+    bool isPassword = false,
   }) {
     return TextField(
       controller: controller,
-      obscureText: isPassword,
+      obscureText: isPassword ? _obscurePassword : false, 
       decoration: InputDecoration(
         hintText: hint,
         prefixIcon: Icon(icon, color: Colors.grey),
+        suffixIcon: isPassword 
+          ? IconButton(
+              icon: Icon(
+                _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                color: Colors.grey,
+              ),
+              onPressed: () {
+                setState(() {
+                  _obscurePassword = !_obscurePassword;
+                });
+              },
+            )
+          : null,
         filled: true,
         fillColor: const Color(0xFFF5F5F5),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(15),
           borderSide: BorderSide.none,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _resetearPassword() async {
+    final TextEditingController resetController = TextEditingController();
+
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("Recuperar contraseña"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text("Ingresa tu correo y te enviaremos un enlace para restablecer tu clave."),
+            const SizedBox(height: 15),
+            TextField(
+              controller: resetController,
+              decoration: InputDecoration(
+                hintText: "tu@correo.com",
+                filled: true,
+                fillColor: const Color(0xFFF5F5F5),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancelar", style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2BB8D1),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              if (resetController.text.trim().isEmpty) return;
+              
+              try {
+                await FirebaseAuth.instance.sendPasswordResetEmail(
+                  email: resetController.text.trim(),
+                );
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  _mostrarError("Enlace enviado. Revisa tu correo.");
+                }
+              } catch (e) {
+                _mostrarError("Error: Asegúrate de que el correo sea correcto.");
+              }
+            },
+            child: const Text("Enviar", style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSocialCircle({
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(50),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              spreadRadius: 2,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border: Border.all(color: Colors.grey.shade100),
+        ),
+        child: Icon(
+          icon,
+          size: 32,
+          color: color,
         ),
       ),
     );

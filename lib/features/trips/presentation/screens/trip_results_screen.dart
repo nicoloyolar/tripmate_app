@@ -9,8 +9,9 @@ import 'package:tripmate_app/features/trips/presentation/screens/trip_detail_scr
 
 class TripResultsScreen extends StatefulWidget {
   final String destinoBusqueda;
+  final int pasajerosBuscados;
   
-  const TripResultsScreen({super.key, required this.destinoBusqueda});
+  const TripResultsScreen({super.key, required this.destinoBusqueda, this.pasajerosBuscados = 1});
 
   @override
   State<TripResultsScreen> createState() => _TripResultsScreenState();
@@ -112,13 +113,11 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
                 final docs = snapshot.data!.docs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
                   
-                  final int asientos = data['asientosDisponibles'] ?? 0;
                   final String driverId = data['driverId'] ?? '';
                   final String estado = data['estado'] ?? 'disponible'; 
                   
-                  return driverId != miUid && 
-                        asientos > 0 && 
-                        estado == 'disponible'; 
+                  return driverId != miUid && estado == 'disponible';
+
                 }).toList();
 
                 if (docs.isEmpty) {
@@ -175,15 +174,18 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
     String origen = _cap(trip['origen']);
     String destino = _cap(trip['destino']);
     int precio = trip['precio'] ?? 0;
-    int asientos = trip['asientosDisponibles'] ?? 0;
+    int asientosDisponibles = trip['asientosDisponibles'] ?? 0;
     String driverId = trip['driverId'] ?? '';
     Timestamp? fechaSalida = trip['fechaSalida'];
+
+    int pasajerosRequeridos = widget.pasajerosBuscados; 
+    bool hayCuposSuficientes = asientosDisponibles >= pasajerosRequeridos;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16, left: 15, right: 15),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A4371), 
+        color: const Color(0xFF1A4371),
         borderRadius: BorderRadius.circular(25),
         boxShadow: [
           BoxShadow(
@@ -193,103 +195,169 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
           ),
         ],
       ),
-      child: Column(
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              FutureBuilder<Map<String, dynamic>?>(
-                future: _getDriverData(driverId),
-                builder: (context, snapshot) {
-                  final userData = snapshot.data;
-                  String nombreReal = userData?['nombre'] ?? "Conductor";
-                  String? fotoUrl = userData?['photoUrl']; 
+      child: Opacity(
+        opacity: hayCuposSuficientes ? 1.0 : 0.85,
+        child: Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                FutureBuilder<Map<String, dynamic>?>(
+                  future: _getDriverData(driverId),
+                  builder: (context, snapshot) {
+                    final userData = snapshot.data;
+                    String nombreReal = userData?['nombre'] ?? "Conductor";
+                    String? fotoUrl = userData?['photoUrl'];
 
-                  return Column(
-                    children: [
-                      CircleAvatar(
-                        radius: 35,
-                        backgroundColor: Colors.white,
-                        backgroundImage: (fotoUrl != null && fotoUrl.isNotEmpty) 
-                            ? NetworkImage(fotoUrl) : null,
-                        child: (fotoUrl == null || fotoUrl.isEmpty)
-                          ? const Icon(Icons.person, color: Color(0xFF1A4371), size: 40) : null,
-                      ),
-                      const SizedBox(height: 8),
-                      SizedBox(
-                        width: 80,
-                        child: Text(nombreReal.split(' ')[0], 
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Colors.white)
+                    return Column(
+                      children: [
+                        CircleAvatar(
+                          radius: 35,
+                          backgroundColor: Colors.white,
+                          backgroundImage: (fotoUrl != null && fotoUrl.isNotEmpty)
+                              ? NetworkImage(fotoUrl)
+                              : null,
+                          child: (fotoUrl == null || fotoUrl.isEmpty)
+                              ? const Icon(Icons.person, color: Color(0xFF1A4371), size: 40)
+                              : null,
                         ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: 80,
+                          child: Text(
+                            nombreReal.split(' ')[0],
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(width: 20),
+                
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Precio
+                          Text(
+                            TripMateFormat.currencyCLP(precio),
+                            style: const TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFF05A28),
+                            ),
+                          ),
+                          
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: hayCuposSuficientes ? Colors.white12 : Colors.redAccent.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.event_seat,
+                                      color: hayCuposSuficientes ? const Color(0xFF2BB8D1) : Colors.redAccent,
+                                      size: 14,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      "$asientosDisponibles",
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: hayCuposSuficientes ? Colors.white : Colors.redAccent,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (!hayCuposSuficientes)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    "Solo quedan $asientosDisponibles cupos",
+                                    style: const TextStyle(
+                                      color: Colors.redAccent,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                      
+                      const SizedBox(height: 5),
+                      Text(
+                        _formatearFecha(fechaSalida),
+                        style: const TextStyle(color: Colors.white70, fontSize: 11),
+                      ),
+                      const SizedBox(height: 15),
+                      
+                      Row(
+                        children: [
+                          Column(
+                            children: [
+                              const Icon(Icons.circle, color: Color(0xFF2BB8D1), size: 10),
+                              Container(width: 1, height: 15, color: Colors.white24),
+                              const Icon(Icons.location_on, color: Color(0xFFF05A28), size: 12),
+                            ],
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(origen, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                                const SizedBox(height: 8),
+                                Text(
+                                  destino,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
-                  );
-                },
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(TripMateFormat.currencyCLP(precio), 
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFFF05A28))),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(8)),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.event_seat, color: Color(0xFF2BB8D1), size: 14),
-                              const SizedBox(width: 4),
-                              Text("$asientos", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 12)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 5),
-                    Text(_formatearFecha(fechaSalida), style: const TextStyle(color: Colors.white70, fontSize: 11)),
-                    const SizedBox(height: 15),
-                    Row(
-                      children: [
-                        Column(
-                          children: [
-                            const Icon(Icons.circle, color: Color(0xFF2BB8D1), size: 10),
-                            Container(width: 1, height: 15, color: Colors.white24),
-                            const Icon(Icons.location_on, color: Color(0xFFF05A28), size: 12),
-                          ],
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(origen, style: const TextStyle(color: Colors.white, fontSize: 13)),
-                              const SizedBox(height: 8),
-                              Text(destino, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 15),
-          Divider(color: Colors.white.withOpacity(0.1), thickness: 1),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text("🚗 Ver detalles del vehículo", style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10)),
-              const Icon(Icons.arrow_forward_ios, color: Colors.white24, size: 12),
-            ],
-          ),
-        ],
+              ],
+            ),
+            const SizedBox(height: 15),
+            Divider(color: Colors.white.withOpacity(0.1), thickness: 1),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  "🚗 Ver detalles del vehículo",
+                  style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10),
+                ),
+                const Icon(Icons.arrow_forward_ios, color: Colors.white24, size: 12),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

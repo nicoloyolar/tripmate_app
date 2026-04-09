@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:firebase_auth/firebase_auth.dart'; 
 import 'package:cloud_firestore/cloud_firestore.dart'; 
 import 'package:tripmate_app/features/trips/presentation/screens/trip_results_screen.dart';
-import 'package:tripmate_app/core/constants/locations.dart'; // Ajusta la ruta según tu carpeta
+import 'package:tripmate_app/core/constants/locations.dart'; 
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -120,21 +120,49 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    StreamBuilder<DocumentSnapshot>(
-                      stream: FirebaseFirestore.instance.collection('users').doc(_uid).snapshots(),
-                      builder: (context, snapshot) {
-                        String saludo = "¿Cuál es tu próximo viaje?";
-                        if (snapshot.hasData && snapshot.data!.exists) {
-                          var data = snapshot.data!.data() as Map<String, dynamic>;
-                          String nombreCompleto = data['nombre'] ?? "";
-                          String primerNombre = nombreCompleto.split(' ').first;
-                          saludo = "Hola, $primerNombre!\n¿A dónde vamos?";
-                        }
-                        return Text(
-                          saludo,
-                          style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                        );
-                      },
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween, 
+                      crossAxisAlignment: CrossAxisAlignment.start, 
+                      children: [
+                        Expanded(
+                          child: StreamBuilder<DocumentSnapshot>(
+                            stream: FirebaseFirestore.instance.collection('users').doc(_uid).snapshots(),
+                            builder: (context, snapshot) {
+                              String saludo = "¿Cuál es tu próximo viaje?";
+                              if (snapshot.hasData && snapshot.data!.exists) {
+                                var data = snapshot.data!.data() as Map<String, dynamic>;
+                                String nombreCompleto = data['nombre'] ?? "";
+                                String primerNombre = nombreCompleto.split(' ').first;
+                                saludo = "Hola, $primerNombre!\n¿A dónde vamos?";
+                              }
+                              return Text(
+                                saludo,
+                                style: const TextStyle(
+                                  color: Colors.white, 
+                                  fontSize: 24, 
+                                  fontWeight: FontWeight.bold
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                        
+                        const SizedBox(width: 10), 
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(35), 
+                          child: Image.asset(
+                            'assets/logo_tripmate.png', 
+                            height: 70,
+                            width: 70, 
+                            fit: BoxFit.cover, 
+                            errorBuilder: (context, error, stackTrace) => const Icon(
+                              Icons.directions_car_filled, 
+                              size: 40, 
+                              color: Colors.white
+                            ),
+                          ),
+                        )
+                      ],
                     ),
                   ],
                 ),
@@ -142,7 +170,6 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ),
 
-          // Tarjeta de búsqueda
           Padding(
             padding: EdgeInsets.only(
               top: MediaQuery.of(context).size.height * 0.18,
@@ -170,7 +197,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const Divider(height: 30),
                   
-                  // Campo Destino con Selector
                   _buildSearchInput(
                     icon: Icons.location_on, 
                     hintText: "Destino", 
@@ -194,7 +220,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   const SizedBox(height: 25),
                   
-                  // Botón Buscar
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -225,7 +250,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // --- Widget mejorado para detectar toques ---
   Widget _buildSearchInput({
     required IconData icon, 
     required String hintText, 
@@ -241,10 +265,10 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 15),
           Expanded(
             child: AbsorbPointer(
-              absorbing: onTap != null, // Bloquea el teclado si hay una función onTap
+              absorbing: onTap != null, 
               child: TextField(
                 controller: controller,
-                readOnly: onTap != null, // Lo hace solo lectura para evitar teclado
+                readOnly: onTap != null, 
                 decoration: InputDecoration(
                   hintText: hintText, 
                   border: InputBorder.none, 
