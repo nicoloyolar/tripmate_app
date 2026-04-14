@@ -1,11 +1,12 @@
 // ignore_for_file: deprecated_member_use
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart'; 
 import 'package:tripmate_app/features/auth/presentation/screens/login_screen.dart';
+import 'package:tripmate_app/features/profile/presentation/screens/edit_profile_screen.dart';
 import 'package:tripmate_app/features/profile/presentation/screens/edit_vehicle_screen.dart';
+import 'package:tripmate_app/features/profile/presentation/screens/payment_methods_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -23,10 +24,7 @@ class ProfileScreen extends StatelessWidget {
 
   String _formatBirthDate(dynamic fecha) {
     if (fecha == null) return "No definida";
-    if (fecha is Timestamp) {
-      DateTime date = fecha.toDate();
-      return DateFormat('dd / MM / yyyy').format(date);
-    }
+    if (fecha is Timestamp) return DateFormat('dd / MM / yyyy').format(fecha.toDate());
     return fecha.toString();
   }
 
@@ -37,115 +35,116 @@ class ProfileScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FB), 
       appBar: AppBar(
-        title: const Text("Mi Perfil", 
-          style: TextStyle(color: Color(0xFF1A4371), fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
+        title: const Text("Mi Perfil", style: TextStyle(color: Color(0xFF1A4371), fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white, elevation: 0, centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_note, color: Color(0xFF1A4371)),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EditProfileScreen())),
+          )
+        ],
       ),
       body: StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance.collection('users').doc(uid).snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          
-          if (!snapshot.hasData || !snapshot.data!.exists) {
-            return const Center(child: Text("No se encontraron datos del usuario"));
-          }
+          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+          if (!snapshot.hasData || !snapshot.data!.exists) return const Center(child: Text("Error al cargar datos"));
           
           var userData = snapshot.data!.data() as Map<String, dynamic>;
           
+          // Datos extendidos
           String nombre = userData['nombre'] ?? 'Usuario';
-          String email = userData['email'] ?? 'Sin correo';
-          String rut = userData['rut'] ?? 'Sin RUT';
-          String genero = userData['genero'] ?? 'No especificado';
-          String? photoUrl = userData['photoUrl']; 
-          dynamic fechaNac = userData['fechaNacimiento'];
+          String bio = userData['bio'] ?? 'Sin biografía añadida...';
+          String? photoUrl = userData['photoUrl'];
+          bool isVerified = userData['isVerified'] ?? false; // Verificación de identidad (Carnet)
+          bool isLicenseVerified = userData['isLicenseVerified'] ?? false; // Licencia aprobada por admin
           
-          Map<String, dynamic>? vehiculo = userData['vehiculo'] != null 
-              ? Map<String, dynamic>.from(userData['vehiculo']) 
-              : null;
+          // Manejo de vehículos (Lista)
+          List<dynamic> vehiculos = userData['vehiculos'] ?? []; 
+          // Si aún usas el campo 'vehiculo' antiguo, lo convertimos a lista para compatibilidad
+          if (vehiculos.isEmpty && userData['vehiculo'] != null) {
+            vehiculos = [userData['vehiculo']];
+          }
 
           return SingleChildScrollView(
             child: Column(
               children: [
+                // CABECERA PERFIL
                 Container(
-                  width: double.infinity,
-                  color: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 30),
+                  width: double.infinity, color: Colors.white,
+                  padding: const EdgeInsets.only(bottom: 30, top: 10),
                   child: Column(
                     children: [
-                      CircleAvatar(
-                        radius: 55,
-                        backgroundColor: const Color(0xFF1A4371).withOpacity(0.1),
-                        backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) 
-                            ? NetworkImage(photoUrl) 
-                            : null,
-                        child: (photoUrl == null || photoUrl.isEmpty) 
-                            ? const Icon(Icons.person, size: 60, color: Color(0xFF1A4371))
-                            : null,
+                      Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 55,
+                            backgroundColor: const Color(0xFF1A4371).withOpacity(0.1),
+                            backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
+                            child: (photoUrl == null || photoUrl.isEmpty) ? const Icon(Icons.person, size: 60, color: Color(0xFF1A4371)) : null,
+                          ),
+                          if (isVerified)
+                            const Positioned(bottom: 0, right: 0, child: Icon(Icons.verified, color: Color(0xFF2BB8D1), size: 28)),
+                        ],
                       ),
                       const SizedBox(height: 15),
-                      Text(nombre, 
-                        style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1A4371))),
-                      Text(email, 
-                        style: const TextStyle(fontSize: 14, color: Colors.grey)),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("INFORMACIÓN PERSONAL", 
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
-                      const SizedBox(height: 15),
-                      _buildInfoTile(Icons.assignment_ind_outlined, "R.U.T", rut),
-                      _buildInfoTile(Icons.wc_outlined, "Género", genero),
-                      _buildInfoTile(Icons.cake_outlined, "Fecha de nacimiento", _formatBirthDate(fechaNac)),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 25),
-
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text("MI VEHÍCULO", 
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2)),
-                      const SizedBox(height: 15),
-                      _buildVehicleSection(context, vehiculo),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 40),
-
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () => _logout(context),
-                      icon: const Icon(Icons.logout, color: Color(0xFFF05A28)),
-                      label: const Text("Cerrar Sesión", 
-                        style: TextStyle(color: Color(0xFFF05A28), fontWeight: FontWeight.bold)),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: Color(0xFFF05A28)),
-                        padding: const EdgeInsets.symmetric(vertical: 15),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      Text(nombre, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF1A4371))),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 8),
+                        child: Text(bio, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: Colors.grey, fontStyle: FontStyle.italic)),
                       ),
+                    ],
+                  ),
+                ),
+
+                // ESTADO DE VALIDACIÓN (Para que el usuario sepa por qué no puede publicar)
+                if (!isLicenseVerified)
+                  Container(
+                    margin: const EdgeInsets.all(20),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(10), border: Border.all(color: Colors.orange.withOpacity(0.3))),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: Colors.orange),
+                        SizedBox(width: 10),
+                        Expanded(child: Text("Debes subir tu licencia y esperar la aprobación del admin para publicar.", style: TextStyle(fontSize: 12, color: Colors.orange, fontWeight: FontWeight.bold))),
+                      ],
                     ),
                   ),
+
+                // SECCIONES
+                _buildSectionTitle("INFORMACIÓN PERSONAL"),
+                _buildInfoGroup([
+                  _buildInfoTile(Icons.assignment_ind_outlined, "R.U.T", userData['rut'] ?? 'S/R'),
+                  _buildInfoTile(Icons.phone_iphone, "Teléfono", userData['telefono'] ?? 'No registrado'),
+                  _buildInfoTile(Icons.cake_outlined, "Nacimiento", _formatBirthDate(userData['fechaNacimiento'])),
+                ]),
+
+                _buildSectionTitle("PAGOS Y TARJETAS"),
+                _buildInfoGroup([
+                  _buildActionTile(Icons.credit_card, "Métodos de Pago", "Gestionar mis tarjetas", () {
+                    Navigator.push(context, MaterialPageRoute(builder: (context) => const PaymentMethodsScreen()));
+                  }),
+                ]),
+
+                _buildSectionTitle("MIS VEHÍCULOS"),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    children: [
+                      ...vehiculos.map((v) => _buildVehicleCard(context, Map<String, dynamic>.from(v), isLicenseVerified)).toList(),
+                      const SizedBox(height: 10),
+                      TextButton.icon(
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EditVehicleScreen())),
+                        icon: const Icon(Icons.add_circle_outline, color: Color(0xFF2BB8D1)),
+                        label: const Text("Agregar otro vehículo", style: TextStyle(color: Color(0xFF2BB8D1), fontWeight: FontWeight.bold)),
+                      ),
+                    ],
+                  ),
                 ),
+
+                const SizedBox(height: 30),
+                _buildLogoutButton(context),
                 const SizedBox(height: 40),
               ],
             ),
@@ -155,87 +154,79 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildVehicleSection(BuildContext context, Map<String, dynamic>? vehiculo) {
-    bool tieneVehiculo = vehiculo != null;
-
-    return GestureDetector(
-      onTap: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => const EditVehicleScreen()),
-        );
-      },
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: tieneVehiculo ? Colors.white : const Color(0xFF2BB8D1).withOpacity(0.05),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: tieneVehiculo ? Colors.transparent : const Color(0xFF2BB8D1).withOpacity(0.3),
-            style: tieneVehiculo ? BorderStyle.none : BorderStyle.solid,
-          ),
-          boxShadow: tieneVehiculo ? [
-            BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))
-          ] : null,
-        ),
-        child: Row(
-          children: [
-            Icon(
-              Icons.directions_car_filled_outlined, 
-              color: tieneVehiculo ? const Color(0xFF2BB8D1) : Colors.grey, 
-              size: 30
-            ),
-            const SizedBox(width: 20),
-            Expanded(
-              child: tieneVehiculo 
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text("${vehiculo['marca']} ${vehiculo['modelo']}", 
-                        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A4371))),
-                      Text("Patente: ${vehiculo['patente']}", 
-                        style: const TextStyle(fontSize: 13, color: Colors.grey)),
-                    ],
-                  )
-                : const Text("Registra tu vehículo para publicar viajes", 
-                    style: TextStyle(fontSize: 14, color: Color(0xFF1A4371), fontWeight: FontWeight.w500)),
-            ),
-            const Icon(Icons.arrow_forward_ios, color: Colors.grey, size: 14),
-          ],
-        ),
-      ),
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(25, 20, 25, 10),
+      child: Align(alignment: Alignment.centerLeft, child: Text(title, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.2))),
     );
   }
 
-  Widget _buildInfoTile(IconData icon, String label, String value) {
+  Widget _buildInfoGroup(List<Widget> children) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(15),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03), 
-            blurRadius: 10, 
-            offset: const Offset(0, 4)
-          )
-        ],
-      ),
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)]),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildVehicleCard(BuildContext context, Map<String, dynamic> v, bool verified) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey[100]!)),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFF2BB8D1), size: 24),
+          const Icon(Icons.directions_car, color: Color(0xFF2BB8D1), size: 30),
           const SizedBox(width: 15),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey, fontWeight: FontWeight.bold)),
-                Text(value, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF1A4371))),
+                Text("${v['marca']} ${v['modelo']}", style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1A4371))),
+                Text("Patente: ${v['patente']}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
               ],
             ),
           ),
+          if (verified) const Icon(Icons.check_circle, color: Colors.green, size: 20)
+          else const Icon(Icons.history, color: Colors.orange, size: 20),
         ],
+      ),
+    );
+  }
+
+  Widget _buildInfoTile(IconData icon, String label, String value) {
+    return ListTile(
+      leading: Icon(icon, color: const Color(0xFF2BB8D1), size: 22),
+      title: Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+      subtitle: Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1A4371))),
+    );
+  }
+
+  Widget _buildActionTile(IconData icon, String title, String subtitle, VoidCallback onTap) {
+    return ListTile(
+      onTap: onTap,
+      leading: Icon(icon, color: const Color(0xFFF05A28), size: 22),
+      title: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1A4371))),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+      trailing: const Icon(Icons.arrow_forward_ios, size: 12),
+    );
+  }
+
+  Widget _buildLogoutButton(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () => _logout(context),
+          icon: const Icon(Icons.logout),
+          label: const Text("Cerrar Sesión"),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFFF05A28), side: const BorderSide(color: Color(0xFFF05A28)),
+            padding: const EdgeInsets.symmetric(vertical: 15),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        ),
       ),
     );
   }

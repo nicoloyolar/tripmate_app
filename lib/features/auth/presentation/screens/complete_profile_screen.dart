@@ -1,11 +1,12 @@
-// ignore_for_file: use_build_context_synchronously
+// ignore_for_file: use_build_context_synchronously, deprecated_member_use
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart'; // Para formatear la fecha
+import 'package:intl/intl.dart';
+import 'package:tripmate_app/core/utils/validators.dart'; 
 import 'dart:io';
 
 import 'package:tripmate_app/features/trips/presentation/screens/main_navegation_screen.dart';
@@ -21,6 +22,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   final TextEditingController _nombreController = TextEditingController();
   final TextEditingController _rutController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   
   DateTime? _fechaNacimiento; 
@@ -30,6 +32,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   bool isLoading = false;
 
   File? _imagenSeleccionada; 
+  File? _imagenCarnet; 
   final ImagePicker _picker = ImagePicker();
 
   @override
@@ -37,8 +40,14 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     _nombreController.dispose();
     _rutController.dispose();
     _emailController.dispose();
+    _phoneController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  bool _isPasswordValid(String password) {
+    final passwordRegExp = RegExp(r'^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$&*~]).{8,}$');
+    return passwordRegExp.hasMatch(password);
   }
 
   Future<void> _seleccionarFecha(BuildContext context) async {
@@ -68,13 +77,11 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         _mostrarError("Debes ser mayor de 18 años para registrarte");
         return;
       }
-      setState(() {
-        _fechaNacimiento = picked;
-      });
+      setState(() => _fechaNacimiento = picked);
     }
   }
 
-  Future<void> _seleccionarImagen() async {
+  Future<void> _seleccionarImagen(bool esPerfil) async {
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
@@ -85,21 +92,22 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       
       if (image != null) {
         setState(() {
-          _imagenSeleccionada = File(image.path);
+          if (esPerfil) {
+            _imagenSeleccionada = File(image.path);
+          } else {
+            _imagenCarnet = File(image.path);
+          }
         });
       }
     } catch (e) {
-      _mostrarError("Error al seleccionar imagen: $e");
+      _mostrarError("Error al seleccionar imagen");
     }
   }
 
-  Future<String?> _subirImagenAFirebase(String uid) async {
-    if (_imagenSeleccionada == null) return null; 
-
+  Future<String?> _subirArchivo(File file, String folder, String uid) async {
     try {
-      final storageRef = FirebaseStorage.instance.ref().child('user_photos').child('$uid.jpg');
-      UploadTask uploadTask = storageRef.putFile(_imagenSeleccionada!);
-      TaskSnapshot snapshot = await uploadTask;
+      final storageRef = FirebaseStorage.instance.ref().child(folder).child('$uid.jpg');
+      TaskSnapshot snapshot = await storageRef.putFile(file);
       return await snapshot.ref.getDownloadURL();
     } catch (e) {
       return null;
@@ -107,39 +115,55 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   }
 
   Future<void> _registrarUsuario() async {
-    
-    String rutLimpio = _rutController.text.trim();
-    if (!validarRutChileno(rutLimpio)) {
-      _mostrarError("El RUT ingresado no es válido. Revisa los puntos y guion.");
-      return;
-    }
-    if (_imagenSeleccionada == null) return _mostrarError("Por favor, sube una foto de perfil");
+    String email = _emailController.text.trim();
+    String password = _passwordController.text.trim();
+    String telefono = _phoneController.text.trim();
+
+    if (_imagenSeleccionada == null) return _mostrarError("Por favor, sube tu foto de perfil");
+    if (_imagenCarnet == null) return _mostrarError("Por favor, sube la foto de tu carnet");
     if (_nombreController.text.trim().isEmpty) return _mostrarError("Ingresa tu nombre");
-    if (_rutController.text.trim().isEmpty) return _mostrarError("Ingresa tu RUT");
-    if (_fechaNacimiento == null) return _mostrarError("Selecciona tu fecha de nacimiento");
+    if (!TripMateValidators.validarRutChileno(_rutController.text)) return _mostrarError("RUT no válido");
+    if (telefono.length < 9) return _mostrarError("Ingresa un teléfono válido (9 dígitos)");
     if (generoSeleccionado == null) return _mostrarError("Selecciona tu género");
+    if (_fechaNacimiento == null) return _mostrarError("Selecciona tu fecha de nacimiento");
+    if (!_isPasswordValid(password)) return _mostrarError("Contraseña debe tener 8+ caracteres, Mayúscula, Número y Símbolo");
     if (!aceptaCondiciones) return _mostrarError("Debes aceptar los términos");
 
     setState(() => isLoading = true);
 
     try {
+      final phoneCheck = await FirebaseFirestore.instance
+          .collection('users')
+          .where('telefono', isEqualTo: telefono)
+          .get();
+
+      if (phoneCheck.docs.isNotEmpty) {
+        _mostrarError("Este número ya está registrado");
+        setState(() => isLoading = false);
+        return;
+      }
+
       UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
+        email: email,
+        password: password,
       );
 
       String uid = userCredential.user!.uid;
 
-      String? fotoUrl = await _subirImagenAFirebase(uid);
+      String? fotoUrl = await _subirArchivo(_imagenSeleccionada!, 'user_photos', uid);
+      String? carnetUrl = await _subirArchivo(_imagenCarnet!, 'user_id_documents', uid);
 
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'uid': uid,
         'nombre': _nombreController.text.trim(),
         'rut': _rutController.text.trim(),
-        'email': _emailController.text.trim(),
+        'email': email,
+        'telefono': telefono,
         'genero': generoSeleccionado,
         'fechaNacimiento': _fechaNacimiento,
-        'photoUrl': fotoUrl, 
+        'photoUrl': fotoUrl,
+        'idDocumentUrl': carnetUrl,
+        'isVerified': false, 
         'createdAt': FieldValue.serverTimestamp(),
         'rol': 'user',
       });
@@ -170,11 +194,8 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
-        title: const Text("Completa tu perfil",
-          style: TextStyle(color: Color(0xFF1A4371), fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white, elevation: 0, centerTitle: true,
+        title: const Text("Completa tu perfil", style: TextStyle(color: Color(0xFF1A4371), fontWeight: FontWeight.bold)),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -183,10 +204,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
             children: [
               const SizedBox(height: 20),
               
-              // SECTOR FOTO DE PERFIL
               Center(
                 child: GestureDetector(
-                  onTap: _seleccionarImagen, 
+                  onTap: () => _seleccionarImagen(true), 
                   child: Stack(
                     children: [
                       CircleAvatar(
@@ -222,6 +242,36 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
               const SizedBox(height: 15),
 
+              _buildFieldLabel("Teléfono Móvil"),
+              _buildTextField(controller: _phoneController, hint: "912345678", icon: Icons.phone_iphone, keyboardType: TextInputType.phone),
+
+              const SizedBox(height: 15),
+
+              _buildFieldLabel("Documento de Identidad (Carnet)"),
+              InkWell(
+                onTap: () => _seleccionarImagen(false),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8F9FB),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _imagenCarnet != null ? Colors.green : Colors.transparent),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.camera_front, color: _imagenCarnet != null ? Colors.green : const Color(0xFF2BB8D1)),
+                      const SizedBox(width: 12),
+                      Text(
+                        _imagenCarnet != null ? "¡Carnet cargado!" : "Subir foto frontal carnet",
+                        style: TextStyle(color: _imagenCarnet != null ? Colors.green : Colors.grey),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 15),
+
               _buildFieldLabel("Correo electrónico"),
               _buildTextField(controller: _emailController, hint: "correo@ejemplo.com", icon: Icons.email_outlined, keyboardType: TextInputType.emailAddress),
 
@@ -229,7 +279,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
               _buildFieldLabel("Género"),
               DropdownButtonFormField<String>(
-                initialValue: generoSeleccionado,
+                value: generoSeleccionado,
                 decoration: _inputDecoration(Icons.wc_outlined),
                 items: ["Masculino", "Femenino", "Otros"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                 onChanged: (v) => setState(() => generoSeleccionado = v),
@@ -242,10 +292,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                 onTap: () => _seleccionarFecha(context),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF8F9FB),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                  decoration: BoxDecoration(color: const Color(0xFFF8F9FB), borderRadius: BorderRadius.circular(12)),
                   child: Row(
                     children: [
                       const Icon(Icons.calendar_month_outlined, color: Color(0xFF2BB8D1)),
@@ -254,10 +301,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                         _fechaNacimiento == null 
                             ? "Selecciona tu fecha" 
                             : DateFormat('dd / MM / yyyy').format(_fechaNacimiento!),
-                        style: TextStyle(
-                          color: _fechaNacimiento == null ? Colors.grey : Colors.black87,
-                          fontSize: 16,
-                        ),
+                        style: TextStyle(color: _fechaNacimiento == null ? Colors.grey : Colors.black87, fontSize: 16),
                       ),
                     ],
                   ),
@@ -271,6 +315,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                 controller: _passwordController,
                 obscureText: obscurePassword, 
                 decoration: _inputDecoration(Icons.lock_outline).copyWith(
+                  hintText: "8+ carac, Mayús y Símbolo",
                   suffixIcon: IconButton(
                     icon: Icon(obscurePassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
                     onPressed: () => setState(() => obscurePassword = !obscurePassword),
@@ -344,29 +389,4 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     );
   }
 
-  bool validarRutChileno(String rut) {
-    rut = rut.replaceAll('.', '').replaceAll('-', '').trim().toUpperCase();
-    
-    if (rut.length < 8) return false;
-
-    String cuerpo = rut.substring(0, rut.length - 1);
-    String dv = rut.substring(rut.length - 1);
-
-    int suma = 0;
-    int multiplo = 2;
-
-    for (int i = cuerpo.length - 1; i >= 0; i--) {
-      suma += int.parse(cuerpo[i]) * multiplo;
-      multiplo = (multiplo == 7) ? 2 : multiplo + 1;
-    }
-
-    int dvEsperadoInt = 11 - (suma % 11);
-    String dvEsperado = (dvEsperadoInt == 11) 
-        ? "0" 
-        : (dvEsperadoInt == 10) 
-            ? "K" 
-            : dvEsperadoInt.toString();
-
-    return dv == dvEsperado;
-  }
 }

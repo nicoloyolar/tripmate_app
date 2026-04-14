@@ -1,7 +1,6 @@
 // ignore_for_file: use_build_context_synchronously, deprecated_member_use
 
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -11,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:tripmate_app/core/utils/formatters.dart'; 
 import 'package:tripmate_app/core/models/location_model.dart';
 import 'package:tripmate_app/core/services/google_maps_service.dart';
+import 'package:tripmate_app/core/utils/geo_utils.dart';
 
 class PublishTripScreen extends StatefulWidget {
   const PublishTripScreen({super.key});
@@ -46,32 +46,27 @@ class _PublishTripScreenState extends State<PublishTripScreen> {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
     
-    if (doc.exists && doc.data()?['vehiculo'] != null) {
+    if (doc.exists) {
+      final userData = doc.data()!;
+      
+      if (userData['isLicenseVerified'] != true) {
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _mostrarMensaje("Tu licencia aún no ha sido aprobada por el administrador.");
+        });
+      }
+
       setState(() {
-        _vehiculoData = Map<String, dynamic>.from(doc.data()!['vehiculo']);
-        _capacidadMax = _vehiculoData!['capacidad'] ?? 4;
+        if (userData['vehiculo'] != null) {
+          _vehiculoData = Map<String, dynamic>.from(userData['vehiculo']);
+          _capacidadMax = _vehiculoData!['capacidad'] ?? 4;
+        }
       });
     }
   }
 
-  double _calcularDistancia(LocationData start, LocationData end) {
-    const double radioTierra = 6371; 
-    double lat1 = start.lat * math.pi / 180;
-    double lat2 = end.lat * math.pi / 180;
-    double lon1 = start.lng * math.pi / 180;
-    double lon2 = end.lng * math.pi / 180;
-    double dLat = lat2 - lat1;
-    double dLon = lon2 - lon1;
-    double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(lat1) * math.cos(lat2) *
-        math.sin(dLon / 2) * math.sin(dLon / 2);
-    double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-    return radioTierra * c; 
-  }
-
   void _actualizarPrecioSugerido() {
     if (_origenData == null || _destinoData == null) return;
-    double kms = _calcularDistancia(_origenData!, _destinoData!);
+    double kms = GeoUtils.calcularDistancia(_origenData!, _destinoData!);
     int tarifa = 160; 
     int precioSugerido = (kms * tarifa).round();
     
@@ -200,13 +195,8 @@ class _PublishTripScreenState extends State<PublishTripScreen> {
       await newTripRef.set({
         'tripId': newTripRef.id,
         'driverId': uid,
-        
-        'origen': _origenData?.address ?? _origenController.text, 
-        'destino': _destinoData?.address ?? _destinoController.text,
-
-        'origenFull': _origenData?.toMap(),
-        'destinoFull': _destinoData?.toMap(),
-
+        'origen': _origenData?.toMap() ?? {'address': _origenController.text, 'lat': 0, 'lng': 0}, 
+        'destino': _destinoData?.toMap() ?? {'address': _destinoController.text, 'lat': 0, 'lng': 0},
         'precio': int.tryParse(precioLimpio) ?? 0, 
         'asientosDisponibles': int.tryParse(_asientosController.text) ?? 1,
         'fechaSalida': Timestamp.fromDate(fullDateTime), 
@@ -217,26 +207,44 @@ class _PublishTripScreenState extends State<PublishTripScreen> {
       
       if (!mounted) return;
 
-      _mostrarMensaje("¡Viaje publicado con éxito!");
+      setState(() => _isPublishing = false);
 
-      setState(() {
-        _isPublishing = false;
-        _currentStep = 0;
-        _origenController.clear();
-        _destinoController.clear();
-        _precioController.clear();
-        _asientosController.clear();
-        _origenData = null;
-        _destinoData = null;
-        _selectedDate = null;
-        _selectedTime = null;
-      });
-
-      Navigator.of(context).pop();
+      showDialog(
+        context: context,
+        barrierDismissible: false, 
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Icon(Icons.check_circle, color: Colors.green, size: 60),
+          content: const Text(
+            "¡Tu viaje se ha publicado con éxito!",
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context); 
+                setState(() {
+                  _currentStep = 0;
+                  _origenController.clear();
+                  _destinoController.clear();
+                  _precioController.clear();
+                  _asientosController.clear();
+                  _origenData = null;
+                  _destinoData = null;
+                  _selectedDate = null;
+                  _selectedTime = null;
+                });
+              },
+              child: const Text("ESTUPENDO", style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
 
     } catch (e) {
       debugPrint("Error al publicar: $e");
-      _mostrarMensaje("Error al publicar: No se pudo conectar con el servidor.");
+      _mostrarMensaje("Error al conectar con el servidor.");
       if (mounted) setState(() => _isPublishing = false);
     }
   }
@@ -264,7 +272,16 @@ class _PublishTripScreenState extends State<PublishTripScreen> {
         child: Stepper(
           type: StepperType.horizontal,
           currentStep: _currentStep,
-          onStepContinue: () {
+          onStepContinue: () async {
+
+            final uid = FirebaseAuth.instance.currentUser?.uid;
+            final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+            
+            if (userDoc.data()?['isLicenseVerified'] != true) {
+              _mostrarMensaje("Acceso denegado: Tu licencia debe estar aprobada para publicar.");
+              return; 
+            }
+
             if (_currentStep == 0 && (_origenData == null || _destinoData == null)) {
               _mostrarMensaje("Por favor, selecciona origen y destino");
               return;
