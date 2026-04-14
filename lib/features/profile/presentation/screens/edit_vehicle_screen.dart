@@ -18,6 +18,8 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
   final _modeloController = TextEditingController();
   final _colorController = TextEditingController();
   final _patenteController = TextEditingController();
+  final _capacidadController = TextEditingController();
+
   bool _isLoading = false;
 
   @override
@@ -37,6 +39,7 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
         _modeloController.text = v['modelo'] ?? '';
         _colorController.text = v['color'] ?? '';
         _patenteController.text = v['patente'] ?? '';
+        _capacidadController.text = (v['capacidad'] ?? '4').toString();
       });
     }
   }
@@ -91,6 +94,7 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
           'modelo': _modeloController.text.trim(),
           'color': _colorController.text.trim(),
           'patente': _patenteController.text.trim().toUpperCase(),
+          'capacidad': int.tryParse(_capacidadController.text) ?? 4, 
         }
       });
       Navigator.pop(context);
@@ -149,6 +153,16 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
                 hint: "Ej: ABCD-12",
                 isReadOnly: false,
                 textCapitalization: TextCapitalization.characters,
+              ),
+              _buildInputGroup(
+                label: "CAPACIDAD DE PASAJEROS",
+                controller: _capacidadController,
+                icon: Icons.groups_rounded,
+                onTap: () => _mostrarSelector(
+                  _capacidadController, 
+                  "Capacidad máxima", 
+                  ['1', '2', '3', '4', '5', '6', '7', '8'] 
+                ),
               ),
               const SizedBox(height: 40),
               _buildSaveButton(),
