@@ -3,6 +3,9 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import 'package:tripmate_app/core/constants/vehicle_data.dart'; 
 
 class EditVehicleScreen extends StatefulWidget {
@@ -14,93 +17,69 @@ class EditVehicleScreen extends StatefulWidget {
 
 class _EditVehicleScreenState extends State<EditVehicleScreen> {
   final _formKey = GlobalKey<FormState>();
+  
   final _marcaController = TextEditingController();
   final _modeloController = TextEditingController();
   final _colorController = TextEditingController();
   final _patenteController = TextEditingController();
   final _capacidadController = TextEditingController();
 
+  File? _fotoPatente;
+  File? _fotoPadron;
   bool _isLoading = false;
+  final ImagePicker _picker = ImagePicker();
 
-  @override
-  void initState() {
-    super.initState();
-    _cargarDatosVehiculo();
-  }
-
-  Future<void> _cargarDatosVehiculo() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-    
-    if (doc.exists && doc.data()?['vehiculo'] != null) {
-      final v = doc.data()!['vehiculo'];
+  Future<void> _seleccionarImagen(String tipo) async {
+    final XFile? image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (image != null) {
       setState(() {
-        _marcaController.text = v['marca'] ?? '';
-        _modeloController.text = v['modelo'] ?? '';
-        _colorController.text = v['color'] ?? '';
-        _patenteController.text = v['patente'] ?? '';
-        _capacidadController.text = (v['capacidad'] ?? '4').toString();
+        if (tipo == 'patente') _fotoPatente = File(image.path);
+        if (tipo == 'padron') _fotoPadron = File(image.path);
       });
     }
   }
 
-  void _mostrarSelector(TextEditingController controller, String titulo, List<String> opciones) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.6,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-        ),
-        padding: const EdgeInsets.all(25),
-        child: Column(
-          children: [
-            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-            const SizedBox(height: 20),
-            Text(titulo, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A4371))),
-            const SizedBox(height: 15),
-            Expanded(
-              child: ListView.separated(
-                itemCount: opciones.length,
-                separatorBuilder: (_, _) => Divider(color: Colors.grey[100]),
-                itemBuilder: (context, i) => ListTile(
-                  title: Text(opciones[i], style: const TextStyle(fontSize: 16)),
-                  trailing: const Icon(Icons.chevron_right, size: 18),
-                  onTap: () {
-                    setState(() => controller.text = opciones[i]);
-                    Navigator.pop(context);
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  Future<String?> _subirArchivo(File file, String folder, String uid) async {
+    try {
+      final ref = FirebaseStorage.instance.ref().child(folder).child('$uid\_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      await ref.putFile(file);
+      return await ref.getDownloadURL();
+    } catch (e) { return null; }
   }
 
   Future<void> _guardarVehiculo() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_fotoPatente == null || _fotoPadron == null) {
+      _notificar("Sube las fotos de la patente y padrón", esError: true);
+      return;
+    }
+
     setState(() => _isLoading = true);
     
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
+      final uid = FirebaseAuth.instance.currentUser!.uid;
+      String? urlPatente = await _subirArchivo(_fotoPatente!, 'vehiculos/patentes', uid);
+      String? urlPadron = await _subirArchivo(_fotoPadron!, 'vehiculos/padrones', uid);
+
+      final nuevoVehiculo = {
+        'marca': _marcaController.text.trim(),
+        'modelo': _modeloController.text.trim(),
+        'color': _colorController.text.trim(),
+        'patente': _patenteController.text.trim().toUpperCase(),
+        'capacidad': int.tryParse(_capacidadController.text) ?? 4,
+        'fotoPatenteUrl': urlPatente,
+        'fotoPadronUrl': urlPadron,
+        'verificado': false,
+      };
+
       await FirebaseFirestore.instance.collection('users').doc(uid).update({
-        'vehiculo': {
-          'marca': _marcaController.text.trim(),
-          'modelo': _modeloController.text.trim(),
-          'color': _colorController.text.trim(),
-          'patente': _patenteController.text.trim().toUpperCase(),
-          'capacidad': int.tryParse(_capacidadController.text) ?? 4, 
-        }
+        'vehiculos': FieldValue.arrayUnion([nuevoVehiculo]),
       });
+
       Navigator.pop(context);
-      _notificar("Vehículo guardado correctamente", esError: false);
+      _notificar("Vehículo enviado a revisión", esError: false);
     } catch (e) {
-      _notificar("Error al guardar: $e", esError: true);
+      _notificar("Error: $e", esError: true);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -117,9 +96,8 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text("Configurar Vehículo", style: TextStyle(color: Color(0xFF1A4371), fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white, elevation: 0, centerTitle: true,
-        iconTheme: const IconThemeData(color: Color(0xFF1A4371)),
+        title: const Text("Registrar Vehículo", style: TextStyle(color: Color(0xFF1A4371), fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white, elevation: 0,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(25),
@@ -127,44 +105,13 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
           key: _formKey,
           child: Column(
             children: [
-              _buildInputGroup(
-                label: "MARCA",
-                controller: _marcaController,
-                icon: Icons.directions_car_filled,
-                onTap: () => _mostrarSelector(_marcaController, "Selecciona una Marca", VehicleConstants.marcas),
-              ),
-              _buildInputGroup(
-                label: "MODELO",
-                controller: _modeloController,
-                icon: Icons.settings_suggest,
-                hint: "Ej: Yaris, Swift, CX-5...",
-                isReadOnly: false,
-              ),
-              _buildInputGroup(
-                label: "COLOR",
-                controller: _colorController,
-                icon: Icons.palette_rounded,
-                onTap: () => _mostrarSelector(_colorController, "Selecciona un Color", VehicleConstants.colores),
-              ),
-              _buildInputGroup(
-                label: "PATENTE",
-                controller: _patenteController,
-                icon: Icons.badge_rounded,
-                hint: "Ej: ABCD-12",
-                isReadOnly: false,
-                textCapitalization: TextCapitalization.characters,
-              ),
-              _buildInputGroup(
-                label: "CAPACIDAD DE PASAJEROS",
-                controller: _capacidadController,
-                icon: Icons.groups_rounded,
-                onTap: () => _mostrarSelector(
-                  _capacidadController, 
-                  "Capacidad máxima", 
-                  ['1', '2', '3', '4', '5', '6', '7', '8'] 
-                ),
-              ),
-              const SizedBox(height: 40),
+              _buildTextField(_marcaController, "MARCA", Icons.directions_car),
+              _buildTextField(_modeloController, "MODELO", Icons.settings_suggest),
+              _buildTextField(_patenteController, "PATENTE", Icons.badge),
+              const SizedBox(height: 20),
+              _buildPhotoBtn("Foto Patente", _fotoPatente, () => _seleccionarImagen('patente')),
+              _buildPhotoBtn("Foto Padrón/SOAP", _fotoPadron, () => _seleccionarImagen('padron')),
+              const SizedBox(height: 30),
               _buildSaveButton(),
             ],
           ),
@@ -173,59 +120,37 @@ class _EditVehicleScreenState extends State<EditVehicleScreen> {
     );
   }
 
-  Widget _buildInputGroup({
-    required String label, 
-    required TextEditingController controller, 
-    required IconData icon, 
-    String? hint,
-    VoidCallback? onTap,
-    bool isReadOnly = true,
-    TextCapitalization textCapitalization = TextCapitalization.none,
-  }) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.1)),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: controller,
-            readOnly: isReadOnly,
-            onTap: onTap,
-            textCapitalization: textCapitalization,
-            validator: (v) => v!.isEmpty ? "Este campo es obligatorio" : null,
-            style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF1A4371)),
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: const Color(0xFFF8F9FB),
-              prefixIcon: Icon(icon, color: const Color(0xFF2BB8D1), size: 22),
-              hintText: hint ?? "Seleccionar...",
-              hintStyle: const TextStyle(color: Colors.grey, fontWeight: FontWeight.normal, fontSize: 14),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
-              contentPadding: const EdgeInsets.symmetric(vertical: 18),
-            ),
-          ),
-        ],
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 15),
+      child: TextFormField(
+        controller: controller,
+        decoration: InputDecoration(
+          labelText: label,
+          prefixIcon: Icon(icon, color: const Color(0xFF2BB8D1)),
+          filled: true, fillColor: const Color(0xFFF8F9FB),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+        ),
       ),
+    );
+  }
+
+  Widget _buildPhotoBtn(String label, File? file, VoidCallback onTap) {
+    return ListTile(
+      onTap: onTap,
+      leading: Icon(file != null ? Icons.check_circle : Icons.camera_alt, color: file != null ? Colors.green : Colors.grey),
+      title: Text(label),
+      trailing: const Icon(Icons.upload),
     );
   }
 
   Widget _buildSaveButton() {
     return SizedBox(
-      width: double.infinity,
-      height: 60,
+      width: double.infinity, height: 55,
       child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFF05A28),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          elevation: 4,
-          shadowColor: const Color(0xFFF05A28).withOpacity(0.4),
-        ),
+        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFF05A28), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15))),
         onPressed: _isLoading ? null : _guardarVehiculo,
-        child: _isLoading 
-          ? const CircularProgressIndicator(color: Colors.white) 
-          : const Text("GUARDAR CAMBIOS", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+        child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("GUARDAR VEHÍCULO", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
     );
   }

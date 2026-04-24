@@ -52,16 +52,13 @@ class ProfileScreen extends StatelessWidget {
           
           var userData = snapshot.data!.data() as Map<String, dynamic>;
           
-          // Datos extendidos
           String nombre = userData['nombre'] ?? 'Usuario';
           String bio = userData['bio'] ?? 'Sin biografía añadida...';
           String? photoUrl = userData['photoUrl'];
-          bool isVerified = userData['isVerified'] ?? false; // Verificación de identidad (Carnet)
-          bool isLicenseVerified = userData['isLicenseVerified'] ?? false; // Licencia aprobada por admin
+          bool isVerified = userData['isVerified'] ?? false; 
+          bool isLicenseVerified = userData['isLicenseVerified'] ?? false; 
           
-          // Manejo de vehículos (Lista)
           List<dynamic> vehiculos = userData['vehiculos'] ?? []; 
-          // Si aún usas el campo 'vehiculo' antiguo, lo convertimos a lista para compatibilidad
           if (vehiculos.isEmpty && userData['vehiculo'] != null) {
             vehiculos = [userData['vehiculo']];
           }
@@ -132,7 +129,7 @@ class ProfileScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
                     children: [
-                      ...vehiculos.map((v) => _buildVehicleCard(context, Map<String, dynamic>.from(v), isLicenseVerified)).toList(),
+                      ...vehiculos.map((v) => _buildVehicleCard(context, Map<String, dynamic>.from(v), isLicenseVerified)),
                       const SizedBox(height: 10),
                       TextButton.icon(
                         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const EditVehicleScreen())),
@@ -169,26 +166,62 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildVehicleCard(BuildContext context, Map<String, dynamic> v, bool verified) {
+  Widget _buildVehicleCard(BuildContext context, Map<String, dynamic> v, bool userLicenseVerified) {
+    bool carVerified = v['verificado'] ?? false;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(15),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15), border: Border.all(color: Colors.grey[100]!)),
+      decoration: BoxDecoration(
+        color: Colors.white, 
+        borderRadius: BorderRadius.circular(15), 
+        border: Border.all(color: carVerified ? Colors.transparent : Colors.orange.withOpacity(0.2)),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))
+        ]
+      ),
       child: Row(
         children: [
-          const Icon(Icons.directions_car, color: Color(0xFF2BB8D1), size: 30),
+          const Icon(Icons.directions_car_rounded, color: Color(0xFF2BB8D1), size: 35),
           const SizedBox(width: 15),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text("${v['marca']} ${v['modelo']}", style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1A4371))),
-                Text("Patente: ${v['patente']}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                Text(
+                  "${v['marca']} ${v['modelo']}", 
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1A4371), fontSize: 15)
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  "Patente: ${v['patente']}", 
+                  style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500)
+                ),
+                Text(
+                  carVerified ? "Vehículo verificado" : "Documentos en revisión",
+                  style: TextStyle(
+                    fontSize: 11, 
+                    color: carVerified ? Colors.green : Colors.orange,
+                    fontWeight: FontWeight.bold
+                  ),
+                ),
               ],
             ),
           ),
-          if (verified) const Icon(Icons.check_circle, color: Colors.green, size: 20)
-          else const Icon(Icons.history, color: Colors.orange, size: 20),
+          Column(
+            children: [
+              Icon(
+                carVerified ? Icons.verified_user : Icons.access_time_filled_rounded, 
+                color: carVerified ? Colors.green : Colors.orange, 
+                size: 24
+              ),
+              if (!userLicenseVerified)
+                const Padding(
+                  padding: EdgeInsets.only(top: 4),
+                  child: Icon(Icons.contact_mail_outlined, color: Colors.redAccent, size: 16),
+                ),
+            ],
+          ),
         ],
       ),
     );

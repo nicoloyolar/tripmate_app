@@ -36,11 +36,14 @@ class _PublishTripScreenState extends State<PublishTripScreen> {
   bool _isPublishing = false;
   int _currentStep = 0;
 
+  List<Map<String, dynamic>> _misVehiculos = [];
+
   @override
   void initState() {
     super.initState();
     _cargarDatosVehiculo();
   }
+
 
   Future<void> _cargarDatosVehiculo() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
@@ -49,16 +52,18 @@ class _PublishTripScreenState extends State<PublishTripScreen> {
     if (doc.exists) {
       final userData = doc.data()!;
       
+      // Verificación de licencia
       if (userData['isLicenseVerified'] != true) {
-        Future.delayed(const Duration(milliseconds: 500), () {
-          _mostrarMensaje("Tu licencia aún no ha sido aprobada por el administrador.");
-        });
+        _mostrarMensaje("Licencia pendiente de aprobación.");
       }
 
       setState(() {
-        if (userData['vehiculo'] != null) {
-          _vehiculoData = Map<String, dynamic>.from(userData['vehiculo']);
-          _capacidadMax = _vehiculoData!['capacidad'] ?? 4;
+        if (userData['vehiculos'] != null) {
+          _misVehiculos = List<Map<String, dynamic>>.from(userData['vehiculos']);
+          if (_misVehiculos.isNotEmpty) {
+            _vehiculoData = _misVehiculos[0];
+            _capacidadMax = _vehiculoData!['capacidad'] ?? 4;
+          }
         }
       });
     }
@@ -274,13 +279,13 @@ class _PublishTripScreenState extends State<PublishTripScreen> {
           currentStep: _currentStep,
           onStepContinue: () async {
 
-            final uid = FirebaseAuth.instance.currentUser?.uid;
-            final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+            //final uid = FirebaseAuth.instance.currentUser?.uid;
+            //final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
             
-            if (userDoc.data()?['isLicenseVerified'] != true) {
+            /*if (userDoc.data()?['isLicenseVerified'] != true) {
               _mostrarMensaje("Acceso denegado: Tu licencia debe estar aprobada para publicar.");
               return; 
-            }
+            }*/
 
             if (_currentStep == 0 && (_origenData == null || _destinoData == null)) {
               _mostrarMensaje("Por favor, selecciona origen y destino");
@@ -353,8 +358,45 @@ class _PublishTripScreenState extends State<PublishTripScreen> {
               title: const Text("Detalles"),
               content: Column(
                 children: [
-                  _buildInputCard(icon: Icons.attach_money, hint: "Precio por persona", controller: _precioController, isNumber: true, formatters: [FilteringTextInputFormatter.digitsOnly, TripMateFormat.inputCLP()]),
+                  if (_misVehiculos.isNotEmpty) 
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 15),
+                      child: DropdownButtonFormField<Map<String, dynamic>>(
+                        value: _vehiculoData,
+                        isExpanded: true, 
+                        decoration: InputDecoration(
+                          labelText: "Vehículo para este viaje",
+                          prefixIcon: const Icon(Icons.directions_car, color: Color(0xFF2BB8D1)),
+                          filled: true,
+                          fillColor: Colors.grey[50],
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                        ),
+                        items: _misVehiculos.map((v) {
+                          return DropdownMenuItem(
+                            value: v,
+                            child: Text("${v['marca']} ${v['modelo']} (${v['patente']})", style: const TextStyle(fontSize: 14)),
+                          );
+                        }).toList(),
+                        onChanged: (nuevo) {
+                          setState(() {
+                            _vehiculoData = nuevo;
+                            _capacidadMax = nuevo?['capacidad'] ?? 4;
+                            _asientosController.clear(); 
+                          });
+                        },
+                      ),
+                    ),
+
+                  _buildInputCard(
+                    icon: Icons.attach_money, 
+                    hint: "Precio por persona", 
+                    controller: _precioController, 
+                    isNumber: true, 
+                    formatters: [FilteringTextInputFormatter.digitsOnly, TripMateFormat.inputCLP()]
+                  ),
+                  
                   const SizedBox(height: 15),
+                  
                   _buildInputCard(
                     icon: Icons.event_seat, 
                     hint: "Asientos (Máx: $_capacidadMax)", 

@@ -114,6 +114,13 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final String origenTexto = widget.tripData['origen'] is Map 
+        ? widget.tripData['origen']['address'] 
+        : widget.tripData['origen'].toString();
+
+    final String destinoTexto = widget.tripData['destino'] is Map 
+        ? widget.tripData['destino']['address'] 
+        : widget.tripData['destino'].toString();
     final String driverId = widget.tripData['driverId'] ?? '';
     final Timestamp? fechaSalida = widget.tripData['fechaSalida'];
     final int cuposMaximos = widget.tripData['asientosDisponibles'] ?? 0;
@@ -178,8 +185,20 @@ class _TripDetailScreenState extends State<TripDetailScreen> {
                   const Text("INFORMACIÓN DEL VIAJE", style: TextStyle(letterSpacing: 1.2, fontWeight: FontWeight.bold, color: Colors.grey, fontSize: 12)),
                   const SizedBox(height: 20),
                   
-                  _buildRouteStep(icon: Icons.radio_button_checked, color: const Color(0xFF2BB8D1), city: _cap(widget.tripData['origen']), label: "Punto de partida", isLast: false),
-                  _buildRouteStep(icon: Icons.location_on, color: const Color(0xFFF05A28), city: _cap(widget.tripData['destino']), label: "Destino final", isLast: true),
+                  _buildRouteStep(
+                    icon: Icons.radio_button_checked, 
+                    color: const Color(0xFF2BB8D1), 
+                    city: _cap(origenTexto), // <--- CAMBIADO
+                    label: "Punto de partida", 
+                    isLast: false
+                  ),
+                  _buildRouteStep(
+                    icon: Icons.location_on, 
+                    color: const Color(0xFFF05A28), 
+                    city: _cap(destinoTexto), // <--- CAMBIADO
+                    label: "Destino final", 
+                    isLast: true
+                  ),
                   
                   const SizedBox(height: 10),
                   Container(

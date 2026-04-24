@@ -6,24 +6,25 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:tripmate_app/core/utils/formatters.dart';
 
-class BookingsScreen extends StatelessWidget {
+class BookingsScreen extends StatefulWidget {
   const BookingsScreen({super.key});
+
+  @override
+  State<BookingsScreen> createState() => _BookingsScreenState();
+}
+
+class _BookingsScreenState extends State<BookingsScreen> {
+  String _filtroActual = 'todos'; 
 
   Future<void> _cancelarReserva(BuildContext context, Map<String, dynamic> booking, String bookingId) async {
     final String? tripId = booking['tripId'];
-    
     final int cantidadADevolver = booking['cantidadAsientos'] ?? 1;
-
-    if (tripId == null) {
-      _mostrarSnackBar(context, "Error: No se encontró el ID del viaje", isError: true);
-      return;
-    }
-
-    final DocumentReference tripRef = FirebaseFirestore.instance.collection('trips').doc(tripId);
-    final DocumentReference bookingRef = FirebaseFirestore.instance.collection('bookings').doc(bookingId);
 
     try {
       await FirebaseFirestore.instance.runTransaction((transaction) async {
+        DocumentReference tripRef = FirebaseFirestore.instance.collection('trips').doc(tripId);
+        DocumentReference bookingRef = FirebaseFirestore.instance.collection('bookings').doc(bookingId);
+        
         DocumentSnapshot tripSnap = await transaction.get(tripRef);
         
         transaction.update(bookingRef, {
@@ -33,19 +34,13 @@ class BookingsScreen extends StatelessWidget {
 
         if (tripSnap.exists) {
           int asientosEnViaje = tripSnap['asientosDisponibles'] ?? 0;
-          
           transaction.update(tripRef, {
             'asientosDisponibles': asientosEnViaje + cantidadADevolver
           });
         }
       });
 
-      _mostrarSnackBar(
-        context, 
-        "Reserva cancelada: se liberaron $cantidadADevolver cupos", 
-        isError: false
-      );
-
+      _mostrarSnackBar(context, "Reserva cancelada exitosamente", isError: false);
     } catch (e) {
       _mostrarSnackBar(context, "Error al cancelar: $e", isError: true);
     }
@@ -55,91 +50,46 @@ class BookingsScreen extends StatelessWidget {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("¿Cancelar reserva?", 
-          style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF1A4371))),
-        content: const Text("Se liberará tu asiento para que otro pasajero pueda tomarlo. Esta acción no se puede deshacer."),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.red),
+            SizedBox(width: 10),
+            Text("Aviso de Sanción", style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text("Al cancelar como PASAJERO:"),
+            SizedBox(height: 10),
+            Text("• Si faltan menos de 2h, se descontarán 5 puntos de tu nivel de confianza.", 
+              style: TextStyle(fontSize: 13, color: Colors.grey)),
+            SizedBox(height: 5),
+            Text("• El conductor será notificado de inmediato.", 
+              style: TextStyle(fontSize: 13, color: Colors.grey)),
+          ],
+        ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("VOLVER", style: TextStyle(color: Colors.grey)),
-          ),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("VOLVER")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFD32F2F),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
-            onPressed: () {
-              Navigator.pop(context); 
-              _cancelarReserva(context, booking, id);
-            },
-            child: const Text("SÍ, CANCELAR", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () { Navigator.pop(context); _cancelarReserva(context, booking, id); },
+            child: const Text("ACEPTAR Y CANCELAR"),
           ),
         ],
       ),
     );
   }
 
-  String _cap(String? s) => 
-      (s == null || s.isEmpty) ? '' : s[0].toUpperCase() + s.substring(1).toLowerCase();
-
   String _formatearFecha(Timestamp? ts) {
     if (ts == null) return "Sin fecha";
     return DateFormat('EEE, d MMM - HH:mm', 'es').format(ts.toDate());
   }
 
-  String _obtenerTiempoRestante(Timestamp? fechaSalida) {
-    if (fechaSalida == null) return "";
-    final ahora = DateTime.now();
-    final salida = fechaSalida.toDate();
-    final diferencia = salida.difference(ahora);
-    
-    if (diferencia.isNegative) return "Viaje finalizado";
-    if (diferencia.inDays > 0) return "En ${diferencia.inDays} días";
-    if (diferencia.inHours > 0) return "En ${diferencia.inHours} h";
-    return "En ${diferencia.inMinutes} min";
-  }
-
   void _mostrarSnackBar(BuildContext context, String msj, {required bool isError}) {
-    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msj),
-        backgroundColor: isError ? Colors.redAccent : const Color(0xFF1A4371),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
-  Widget _buildStatusChip(String status) {
-    Color colorCuerpo;
-    Color colorTexto;
-    String texto;
-
-    switch (status.toLowerCase()) {
-      case 'confirmado':
-        colorCuerpo = const Color(0xFFE8F5E9); 
-        colorTexto = const Color(0xFF2E7D32);  
-        texto = "Confirmado";
-        break;
-      case 'cancelado':
-        colorCuerpo = const Color(0xFFFFEBEE); 
-        colorTexto = const Color(0xFFD32F2F);
-        texto = "Cancelado";
-        break;
-      default:
-        colorCuerpo = Colors.orange[50]!;
-        colorTexto = Colors.orange[800]!;
-        texto = status;
-    }
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: colorCuerpo, borderRadius: BorderRadius.circular(10)),
-      child: Text(texto.toUpperCase(),
-        style: TextStyle(color: colorTexto, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 0.5)),
+      SnackBar(content: Text(msj), backgroundColor: isError ? Colors.redAccent : const Color(0xFF1A4371))
     );
   }
 
@@ -150,136 +100,235 @@ class BookingsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
-        title: const Text("Mis Reservas", 
-          style: TextStyle(color: Color(0xFF1A4371), fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white, 
-        elevation: 0, 
-        centerTitle: true,
+        title: const Text("Mis Reservas", style: TextStyle(color: Color(0xFF1A4371), fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white, elevation: 0, centerTitle: true,
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('bookings')
-            .where('passengerId', isEqualTo: user?.uid)
-            .orderBy('fechaReserva', descending: true)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}"));
-          if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-          
-          final docs = snapshot.data?.docs ?? [];
-          if (docs.isEmpty) return _buildEmptyState(context);
-
-          return ListView.builder(
-            padding: const EdgeInsets.all(20),
-            itemCount: docs.length,
-            itemBuilder: (context, index) {
-              final doc = docs[index];
-              final booking = doc.data() as Map<String, dynamic>;
-              return _buildBookingCard(context, booking, doc.id);
-            },
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+      body: Column(
         children: [
-          Icon(Icons.bookmark_border_outlined, size: 80, color: Colors.grey[300]),
-          const SizedBox(height: 20),
-          const Text("No tienes reservas activas", style: TextStyle(color: Colors.grey, fontSize: 16)),
+          _buildFiltros(),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('bookings')
+                  .where('passengerId', isEqualTo: user?.uid)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return Center(child: Text("Error al cargar datos"));
+                }
+
+                var docs = snapshot.data?.docs ?? [];
+
+                final filteredDocs = docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  if (data['fechaSalida'] == null) return false;
+                  
+                  final salida = (data['fechaSalida'] as Timestamp).toDate();
+                  final status = (data['status'] ?? 'confirmado').toString().toLowerCase();
+                  final ahora = DateTime.now();
+
+                  if (_filtroActual == 'todos') return true;
+                  if (_filtroActual == 'pasado') return salida.isBefore(ahora) && status == 'confirmado';
+                  if (_filtroActual == 'confirmado') return status == 'confirmado' && salida.isAfter(ahora);
+                  if (_filtroActual == 'cancelado') return status == 'cancelado';
+                  
+                  return true;
+                }).toList();
+
+                if (filteredDocs.isEmpty) {
+                  return _buildEmptyState();
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(20),
+                  itemCount: filteredDocs.length,
+                  itemBuilder: (context, index) {
+                    final booking = filteredDocs[index].data() as Map<String, dynamic>;
+                    return _buildBookingCard(context, booking, filteredDocs[index].id);
+                  },
+                );
+              },
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildBookingCard(BuildContext context, Map<String, dynamic> booking, String bookingId) {
-    final String status = booking['status'] ?? 'Pendiente';
-    final Timestamp? fechaSalidaTs = booking['fechaSalida'];
-    final String tiempoFalta = _obtenerTiempoRestante(fechaSalidaTs);
-    
-    final bool esPasado = fechaSalidaTs != null && fechaSalidaTs.toDate().isBefore(DateTime.now());
-    final bool esCancelado = status.toLowerCase() == 'cancelado';
-    final bool puedeCancelar = !esPasado && !esCancelado;
-
+  Widget _buildFiltros() {
     return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
-      ),
-      child: Column(
+      height: 50,
+      margin: const EdgeInsets.symmetric(vertical: 10),
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 15),
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 15, 20, 0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildStatusChip(status),
-                if (!esPasado && !esCancelado)
-                  Text(tiempoFalta, style: const TextStyle(color: Color(0xFFF05A28), fontWeight: FontWeight.bold, fontSize: 11)),
-              ],
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Row(
-              children: [
-                Column(children: [
-                  const Icon(Icons.circle, color: Color(0xFF2BB8D1), size: 12),
-                  Container(height: 20, width: 1.5, color: Colors.grey[100]),
-                  const Icon(Icons.location_on, color: Color(0xFFF05A28), size: 14),
-                ]),
-                const SizedBox(width: 15),
-                Expanded(child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(_cap(booking['origen']), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1A4371))),
-                    const SizedBox(height: 10),
-                    Text(_cap(booking['destino']), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Color(0xFF1A4371))),
-                  ],
-                )),
-                Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-                  Text(TripMateFormat.currencyCLP(booking['precio']), 
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A4371))),
-                  Text(_formatearFecha(fechaSalidaTs), style: const TextStyle(fontSize: 10, color: Colors.grey)),
-                ]),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 20),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF8F9FA), 
-              borderRadius: const BorderRadius.only(bottomLeft: Radius.circular(24), bottomRight: Radius.circular(24))
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  esCancelado ? Icons.cancel_outlined : (esPasado ? Icons.check_circle_outline : Icons.info_outline), 
-                  size: 14, 
-                  color: Colors.grey
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  esCancelado ? "Reserva anulada" : (esPasado ? "Viaje completado" : "Presentarse 5 min antes"), 
-                  style: TextStyle(color: Colors.grey[600], fontSize: 11)
-                ),
-                const Spacer(),
-                if (puedeCancelar)
-                  TextButton(
-                    onPressed: () => _confirmarCancelacion(context, booking, bookingId),
-                    child: const Text("CANCELAR", style: TextStyle(color: Color(0xFFD32F2F), fontSize: 11, fontWeight: FontWeight.bold)),
-                  )
-                else
+          _filterChip("todos", "Todas"),
+          _filterChip("confirmado", "Próximas"),
+          _filterChip("cancelado", "Canceladas"),
+          _filterChip("pasado", "Historial"),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterChip(String id, String label) {
+    bool selected = _filtroActual == id;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(label, style: TextStyle(color: selected ? Colors.white : Colors.black54, fontSize: 12)),
+        selected: selected,
+        onSelected: (val) => setState(() => _filtroActual = id),
+        selectedColor: const Color(0xFF2BB8D1),
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      ),
+    );
+  }
+
+  Widget _buildBookingCard(BuildContext context, Map<String, dynamic> booking, String bookingId) {
+    final Timestamp? fechaSalidaTs = booking['fechaSalida'];
+    final salida = fechaSalidaTs?.toDate() ?? DateTime.now();
+    final diferencia = salida.difference(DateTime.now());
+    
+    bool esCritico = diferencia.inMinutes <= 60 && diferencia.inMinutes > 0 && booking['status'] == 'confirmado';
+    bool esPasado = salida.isBefore(DateTime.now());
+    bool esCancelado = booking['status'] == 'cancelado';
+
+    return GestureDetector(
+      onTap: () => _mostrarDetalles(context, booking),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 15),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: esCritico ? Border.all(color: const Color(0xFFF05A28), width: 1.5) : null,
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
+        ),
+        child: Column(
+          children: [
+            if (esCritico)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                decoration: const BoxDecoration(color: Color(0xFFF05A28), borderRadius: BorderRadius.only(topLeft: Radius.circular(20), topRight: Radius.circular(20))),
+                child: const Text("SALIDA EN MENOS DE 1 HORA", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+              ),
+            ListTile(
+              contentPadding: const EdgeInsets.all(15),
+              leading: _buildConductorInfo(booking['driverId']),
+              title: Text("${booking['origen']} → ${booking['destino']}", 
+                maxLines: 1, overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF1A4371))),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 5),
+                  Text(_formatearFecha(fechaSalidaTs), style: const TextStyle(fontSize: 12)),
+                ],
+              ),
+              trailing: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(TripMateFormat.currencyCLP(booking['precio']), style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2BB8D1))),
                   const Icon(Icons.chevron_right, size: 16, color: Colors.grey),
-              ],
+                ],
+              ),
             ),
-          ),
+            if (!esPasado && !esCancelado)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10, right: 15),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: () => _confirmarCancelacion(context, booking, bookingId),
+                    child: const Text("CANCELAR RESERVA", style: TextStyle(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildConductorInfo(String? driverId) {
+    return FutureBuilder<DocumentSnapshot>(
+      future: FirebaseFirestore.instance.collection('users').doc(driverId).get(),
+      builder: (context, snap) {
+        if (!snap.hasData) return const CircleAvatar(radius: 20, child: Icon(Icons.person));
+        final data = snap.data!.data() as Map<String, dynamic>;
+        return Column(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundImage: data['photoUrl'] != null ? NetworkImage(data['photoUrl']) : null,
+              child: data['photoUrl'] == null ? const Icon(Icons.person, size: 18) : null,
+            ),
+            const SizedBox(height: 2),
+            Text(data['nombre'].toString().split(' ')[0], style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold)),
+          ],
+        );
+      },
+    );
+  }
+
+  void _mostrarDetalles(BuildContext context, Map<String, dynamic> booking) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(25),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text("Detalle del Viaje", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A4371))),
+            const Divider(height: 30),
+            _detailItem(Icons.my_location, "Origen", booking['origen']),
+            _detailItem(Icons.location_on, "Destino", booking['destino']),
+            _detailItem(Icons.access_time, "Salida", _formatearFecha(booking['fechaSalida'])),
+            _detailItem(Icons.paid_outlined, "Total Pagado", TripMateFormat.currencyCLP(booking['precio'])),
+            const SizedBox(height: 20),
+            const Text("Recuerda estar en el punto de encuentro 5 minutos antes.", 
+              style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.grey)),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _detailItem(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: const Color(0xFF2BB8D1)),
+          const SizedBox(width: 15),
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+            Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.directions_car_filled_outlined, size: 80, color: Colors.grey[300]),
+          const SizedBox(height: 20),
+          Text("No hay viajes en esta categoría", style: TextStyle(color: Colors.grey[400])),
         ],
       ),
     );

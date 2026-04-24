@@ -86,22 +86,14 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
           
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: esBusquedaGeneral
-                ? FirebaseFirestore.instance
-                    .collection('trips')
-                    .where('fechaSalida', isGreaterThanOrEqualTo: limiteVigencia)
-                    .orderBy('fechaSalida', descending: false)
-                    .snapshots()
-                : FirebaseFirestore.instance
-                    .collection('trips')
-                    .where('destino', isEqualTo: widget.destinoBusqueda.toLowerCase().trim())
-                    .where('fechaSalida', isGreaterThanOrEqualTo: limiteVigencia)
-                    .orderBy('fechaSalida', descending: false)
-                    .snapshots(),
+              stream: FirebaseFirestore.instance
+                  .collection('trips')
+                  .where('fechaSalida', isGreaterThanOrEqualTo: limiteVigencia)
+                  .orderBy('fechaSalida', descending: false)
+                  .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  debugPrint("ERROR FIRESTORE: ${snapshot.error}");
-                  return Center(child: Text("Error al cargar datos. Verifica los índices."));
+                  return const Center(child: Text("Error al conectar con la cartelera"));
                 }
                 
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -114,10 +106,15 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
                   final data = doc.data() as Map<String, dynamic>;
                   
                   final String driverId = data['driverId'] ?? '';
-                  final String estado = data['estado'] ?? 'disponible'; 
+                  final String estado = data['estado'] ?? 'disponible';
+                  final String destinoTrip = (data['destino'] ?? '').toString().toLowerCase().trim();
+                  final String busqueda = widget.destinoBusqueda.toLowerCase().trim();
                   
-                  return driverId != miUid && estado == 'disponible';
-
+                  bool noEsMio = driverId != miUid;
+                  bool estaDisponible = estado == 'disponible';
+                  bool coincideDestino = busqueda.isEmpty || destinoTrip.contains(busqueda);
+                  
+                  return noEsMio && estaDisponible && coincideDestino;
                 }).toList();
 
                 if (docs.isEmpty) {
@@ -171,8 +168,18 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
   }
 
   Widget _buildTripCard(Map<String, dynamic> trip) {
-    String origen = _cap(trip['origen']);
-    String destino = _cap(trip['destino']);
+    String origen = "";
+    if (trip['origen'] is Map) {
+      origen = _cap(trip['origen']['address']);
+    } else {
+      origen = _cap(trip['origen'].toString());
+    }
+    String destino = "";
+    if (trip['destino'] is Map) {
+      destino = _cap(trip['destino']['address']);
+    } else {
+      destino = _cap(trip['destino'].toString());
+    }
     int precio = trip['precio'] ?? 0;
     int asientosDisponibles = trip['asientosDisponibles'] ?? 0;
     String driverId = trip['driverId'] ?? '';

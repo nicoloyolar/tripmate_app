@@ -6,6 +6,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:tripmate_app/core/constants/legal_constants.dart';
 import 'package:tripmate_app/core/utils/validators.dart'; 
 import 'dart:io';
 
@@ -189,6 +190,115 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     );
   }
 
+  void _mostrarTerminos(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            "Términos y Condiciones",
+            style: TextStyle(color: Color(0xFF1A4371), fontWeight: FontWeight.bold),
+          ),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: const [
+                  Text(
+                    "Bienvenido a TripMate.\n\n"
+                    "1. Uso del Servicio: Nuestra plataforma facilita el contacto entre conductores y pasajeros...\n\n"
+                    "2. Seguridad: Los usuarios deben proporcionar datos reales y verificables...\n\n"
+                    "3. Privacidad: Sus datos serán tratados según nuestra política de protección de datos...\n\n"
+                    "4. Responsabilidad: TripMate no se hace responsable por acuerdos privados entre usuarios...",
+                    style: TextStyle(fontSize: 14, color: Colors.black),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("ENTENDIDO", style: TextStyle(color: Color(0xFFF05A28), fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _mostrarLegales(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return DefaultTabController(
+          length: 2,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            titlePadding: EdgeInsets.zero,
+            title: Column(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.only(top: 20, bottom: 10),
+                  child: Text("Información Legal", 
+                    style: TextStyle(color: Color(0xFF1A4371), fontWeight: FontWeight.bold)),
+                ),
+                const TabBar(
+                  labelColor: Color(0xFF2BB8D1),
+                  unselectedLabelColor: Colors.grey,
+                  indicatorColor: Color(0xFF2BB8D1),
+                  tabs: [
+                    Tab(text: "Términos"),
+                    Tab(text: "Privacidad"),
+                  ],
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              height: MediaQuery.of(context).size.height * 0.5, 
+              child: TabBarView(
+                children: [
+                  _seccionLegal(
+                    titulo: "TÉRMINOS Y CONDICIONES", 
+                    contenido: TripMateLegales.terminosYCondiciones 
+                  ),
+                  _seccionLegal(
+                    titulo: "POLÍTICA DE PRIVACIDAD", 
+                    contenido: TripMateLegales.politicaPrivacidad 
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("CERRAR", style: TextStyle(color: Color(0xFFF05A28), fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _seccionLegal({required String titulo, required String contenido}) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(titulo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          const SizedBox(height: 10),
+          Text(contenido, style: const TextStyle(fontSize: 13, color: Colors.black87)),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -280,9 +390,39 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               _buildFieldLabel("Género"),
               DropdownButtonFormField<String>(
                 value: generoSeleccionado,
-                decoration: _inputDecoration(Icons.wc_outlined),
-                items: ["Masculino", "Femenino", "Otros"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                onChanged: (v) => setState(() => generoSeleccionado = v),
+                // Asegura que el fondo del menú desplegable sea blanco
+                dropdownColor: Colors.white, 
+                decoration: _inputDecoration(Icons.wc_outlined).copyWith(
+                  hintText: "Selecciona tu género",
+                  hintStyle: const TextStyle(color: Colors.grey),
+                ),
+                // Esto controla cómo se ve el texto DESPUÉS de seleccionar una opción
+                selectedItemBuilder: (BuildContext context) {
+                  return ["Masculino", "Femenino", "Otros"].map<Widget>((String item) {
+                    return Text(
+                      item,
+                      style: const TextStyle(
+                        color: Color(0xFF1A4371), // Tu azul oscuro de TripMate
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    );
+                  }).toList();
+                },
+                items: ["Masculino", "Femenino", "Otros"].map((e) {
+                  return DropdownMenuItem(
+                    value: e,
+                    child: Text(
+                      e,
+                      style: const TextStyle(color: Colors.black87, fontSize: 16),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (v) {
+                  setState(() {
+                    generoSeleccionado = v;
+                  });
+                },
               ),
 
               const SizedBox(height: 15),
@@ -329,10 +469,39 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                 children: [
                   Checkbox(
                     value: aceptaCondiciones,
-                    activeColor: const Color(0xFF1A4371), 
+                    activeColor: const Color(0xFF1A4371),
                     onChanged: (v) => setState(() => aceptaCondiciones = v ?? false),
                   ),
-                  const Expanded(child: Text("Acepto los términos y condiciones de TripMate", style: TextStyle(fontSize: 12))),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => _mostrarLegales(context), // <--- Llamamos a la nueva función
+                      child: RichText(
+                        text: TextSpan(
+                          style: const TextStyle(fontSize: 12, color: Colors.black87),
+                          children: [
+                            const TextSpan(text: "Acepto los "),
+                            TextSpan(
+                              text: "términos y condiciones",
+                              style: TextStyle(
+                                color: const Color(0xFF2BB8D1),
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                            const TextSpan(text: " y la "),
+                            TextSpan(
+                              text: "política de privacidad",
+                              style: TextStyle(
+                                color: const Color(0xFF2BB8D1),
+                                fontWeight: FontWeight.bold,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
 
