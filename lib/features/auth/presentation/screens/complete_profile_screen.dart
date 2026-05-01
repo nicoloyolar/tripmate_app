@@ -190,45 +190,6 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     );
   }
 
-  void _mostrarTerminos(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text(
-            "Términos y Condiciones",
-            style: TextStyle(color: Color(0xFF1A4371), fontWeight: FontWeight.bold),
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    "Bienvenido a TripMate.\n\n"
-                    "1. Uso del Servicio: Nuestra plataforma facilita el contacto entre conductores y pasajeros...\n\n"
-                    "2. Seguridad: Los usuarios deben proporcionar datos reales y verificables...\n\n"
-                    "3. Privacidad: Sus datos serán tratados según nuestra política de protección de datos...\n\n"
-                    "4. Responsabilidad: TripMate no se hace responsable por acuerdos privados entre usuarios...",
-                    style: TextStyle(fontSize: 14, color: Colors.black),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("ENTENDIDO", style: TextStyle(color: Color(0xFFF05A28), fontWeight: FontWeight.bold)),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   void _mostrarLegales(BuildContext context) {
     showDialog(

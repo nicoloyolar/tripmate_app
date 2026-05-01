@@ -23,6 +23,10 @@ dependencies:
   google_maps_flutter: ^2.5.3
   http: ^1.1.0
   geolocator: ^10.1.0
+  google_sign_in: ^6.2.2
+  sign_in_with_apple: ^6.1.4
+  flutter_facebook_auth: ^7.1.1
+  crypto: ^3.0.6
   
 dev_dependencies:
   flutter_test:

@@ -16,7 +16,7 @@ class EditProfileScreen extends StatefulWidget {
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
-  
+
   // Controladores para los campos de texto
   final _nombreController = TextEditingController();
   final _telefonoController = TextEditingController();
@@ -45,8 +45,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<void> _cargarDatosUsuario() async {
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
-      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-      
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+
       if (doc.exists) {
         final data = doc.data()!;
         setState(() {
@@ -64,11 +67,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   // Selección de imagen desde la galería
   Future<void> _pickImage() async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
-    
-    if (image != null) {
-      setState(() => _imageFile = File(image.path));
+    try {
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 80,
+      );
+
+      if (image != null) {
+        setState(() => _imageFile = File(image.path));
+      }
+    } catch (e) {
+      _notificar("No se pudo seleccionar la foto", esError: true);
     }
   }
 
@@ -79,8 +91,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     if (_telefonoController.text.isNotEmpty) camposCompletos++;
     if (_bioController.text.isNotEmpty) camposCompletos++;
     if (_currentPhotoUrl != null || _imageFile != null) camposCompletos++;
-    
-    return camposCompletos / 4; 
+
+    return camposCompletos / 4;
   }
 
   // Guardar cambios en Firebase
@@ -94,7 +106,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
       // Si el usuario seleccionó una foto nueva, subirla a Storage
       if (_imageFile != null) {
-        final ref = FirebaseStorage.instance.ref().child('perfiles').child('$uid.jpg');
+        final ref = FirebaseStorage.instance
+            .ref()
+            .child('user_photos')
+            .child('$uid-${DateTime.now().millisecondsSinceEpoch}.jpg');
         await ref.putFile(_imageFile!);
         finalPhotoUrl = await ref.getDownloadURL();
       }
@@ -119,19 +134,32 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   void _notificar(String msj, {required bool esError}) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msj), backgroundColor: esError ? Colors.redAccent : const Color(0xFF1A4371))
+      SnackBar(
+        content: Text(msj),
+        backgroundColor: esError ? Colors.redAccent : const Color(0xFF1A4371),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isFetching) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    if (_isFetching) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        title: const Text("Editar Perfil", style: TextStyle(color: Color(0xFF1A4371), fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white, elevation: 0, centerTitle: true,
+        title: const Text(
+          "Editar Perfil",
+          style: TextStyle(
+            color: Color(0xFF1A4371),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
         iconTheme: const IconThemeData(color: Color(0xFF1A4371)),
       ),
       body: SingleChildScrollView(
@@ -147,21 +175,36 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     CircleAvatar(
                       radius: 60,
                       backgroundColor: const Color(0xFF1A4371).withOpacity(0.1),
-                      backgroundImage: _imageFile != null 
-                        ? FileImage(_imageFile!) 
-                        : (_currentPhotoUrl != null ? NetworkImage(_currentPhotoUrl!) : null) as ImageProvider?,
+                      backgroundImage: _imageFile != null
+                          ? FileImage(_imageFile!)
+                          : (_currentPhotoUrl != null
+                                    ? NetworkImage(_currentPhotoUrl!)
+                                    : null)
+                                as ImageProvider?,
                       child: (_imageFile == null && _currentPhotoUrl == null)
-                        ? const Icon(Icons.person, size: 60, color: Color(0xFF1A4371))
-                        : null,
+                          ? const Icon(
+                              Icons.person,
+                              size: 60,
+                              color: Color(0xFF1A4371),
+                            )
+                          : null,
                     ),
                     Positioned(
-                      bottom: 0, right: 0,
+                      bottom: 0,
+                      right: 0,
                       child: GestureDetector(
                         onTap: _pickImage,
                         child: Container(
                           padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(color: Color(0xFF2BB8D1), shape: BoxShape.circle),
-                          child: const Icon(Icons.camera_alt, color: Colors.white, size: 20),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFF2BB8D1),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.camera_alt,
+                            color: Colors.white,
+                            size: 20,
+                          ),
                         ),
                       ),
                     ),
@@ -217,8 +260,21 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text("Completitud del perfil", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF1A4371))),
-            Text("${(porcentaje * 100).toInt()}%", style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF2BB8D1))),
+            const Text(
+              "Completitud del perfil",
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1A4371),
+              ),
+            ),
+            Text(
+              "${(porcentaje * 100).toInt()}%",
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF2BB8D1),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -238,35 +294,67 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Widget _buildFieldLabel(String label) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8, top: 15),
-      child: Align(alignment: Alignment.centerLeft, child: Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1.1))),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey,
+            letterSpacing: 1.1,
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _buildTextField({required TextEditingController controller, required IconData icon, required String hint, int maxLines = 1, TextInputType keyboardType = TextInputType.text}) {
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required IconData icon,
+    required String hint,
+    int maxLines = 1,
+    TextInputType keyboardType = TextInputType.text,
+  }) {
     return TextFormField(
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
       onChanged: (_) => setState(() {}),
       decoration: InputDecoration(
-        filled: true, fillColor: const Color(0xFFF8F9FB),
+        filled: true,
+        fillColor: const Color(0xFFF8F9FB),
         prefixIcon: Icon(icon, color: const Color(0xFF2BB8D1)),
         hintText: hint,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(15),
+          borderSide: BorderSide.none,
+        ),
       ),
     );
   }
 
   Widget _buildSaveButton() {
     return SizedBox(
-      width: double.infinity, height: 55,
+      width: double.infinity,
+      height: 55,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFFF05A28),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
         ),
         onPressed: _isLoading ? null : _actualizarPerfil,
-        child: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Text("GUARDAR PERFIL", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        child: _isLoading
+            ? const CircularProgressIndicator(color: Colors.white)
+            : const Text(
+                "GUARDAR PERFIL",
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
       ),
     );
   }

@@ -24,6 +24,32 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>TripMate usa tu ubicación para seleccionar puntos exactos de origen y destino.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>TripMate usa la cámara para subir documentos del vehículo.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>TripMate usa tu galería para seleccionar fotos de documentos del vehículo.</string>
+	<key>FacebookAppID</key>
+	<string>REPLACE_WITH_FACEBOOK_APP_ID</string>
+	<key>FacebookClientToken</key>
+	<string>REPLACE_WITH_FACEBOOK_CLIENT_TOKEN</string>
+	<key>FacebookDisplayName</key>
+	<string>TripMate</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>fbREPLACE_WITH_FACEBOOK_APP_ID</string>
+			</array>
+		</dict>
+	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>fbapi</string>
+		<string>fb-messenger-share-api</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

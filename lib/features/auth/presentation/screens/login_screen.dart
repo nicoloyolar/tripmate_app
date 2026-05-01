@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
+import 'package:tripmate_app/core/services/social_auth_service.dart';
 import 'package:tripmate_app/features/auth/presentation/screens/complete_profile_screen.dart';
 import 'package:tripmate_app/features/trips/presentation/screens/main_navegation_screen.dart';
 
@@ -56,12 +58,61 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  Future<void> _iniciarSesionSocial(SocialProvider provider) async {
+    setState(() => _isLoading = true);
+
+    try {
+      final credential = switch (provider) {
+        SocialProvider.google => await SocialAuthService.signInWithGoogle(),
+        SocialProvider.facebook => await SocialAuthService.signInWithFacebook(),
+        SocialProvider.apple => await SocialAuthService.signInWithApple(),
+      };
+
+      if (credential == null) {
+        _mostrarError("Inicio de sesión cancelado");
+        return;
+      }
+
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      _mostrarError(_mensajeAuthSocial(e));
+    } catch (e) {
+      _mostrarError("No pudimos iniciar sesión con este proveedor.");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  String _mensajeAuthSocial(FirebaseAuthException e) {
+    if (e.code == 'account-exists-with-different-credential') {
+      return "Ya existe una cuenta con este correo usando otro método.";
+    }
+    if (e.code == 'invalid-credential') {
+      return "La credencial no es válida o expiró.";
+    }
+    if (e.code == 'operation-not-allowed') {
+      return "Este proveedor no está habilitado en Firebase.";
+    }
+    return e.message ?? "Error al iniciar sesión.";
+  }
+
   void _mostrarError(String mensaje) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(mensaje)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(mensaje)));
   }
 
   @override
   Widget build(BuildContext context) {
+    final showAppleSignIn =
+        defaultTargetPlatform == TargetPlatform.iOS ||
+        defaultTargetPlatform == TargetPlatform.macOS;
+
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
@@ -69,23 +120,25 @@ class _LoginScreenState extends State<LoginScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 30.0),
           child: Column(
             children: [
-              const SizedBox(height: 60), 
+              const SizedBox(height: 60),
               Image.asset(
-                'assets/background-image-trip-mate.jpeg', 
+                'assets/background-image-trip-mate.jpeg',
                 height: 350,
                 errorBuilder: (context, error, stackTrace) => const Icon(
-                  Icons.directions_car_filled, size: 100, color: Color(0xFF1A4371),
+                  Icons.directions_car_filled,
+                  size: 100,
+                  color: Color(0xFF1A4371),
                 ),
-              ), 
+              ),
 
-              const SizedBox(height: 20), 
+              const SizedBox(height: 20),
 
               _buildTextField(
                 controller: _emailController,
                 hint: "Correo electrónico",
                 icon: Icons.email_outlined,
               ),
-              
+
               const SizedBox(height: 10),
 
               _buildTextField(
@@ -104,13 +157,20 @@ class _LoginScreenState extends State<LoginScreen> {
                   onPressed: _isLoading ? null : _iniciarSesion,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFF05A28),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
                   ),
-                  child: _isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("Iniciar Sesión", 
-                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)
-                      ),
+                  child: _isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          "Iniciar Sesión",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
 
@@ -118,15 +178,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
               Row(
                 children: [
-                  Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+                  Expanded(
+                    child: Divider(color: Colors.grey.shade300, thickness: 1),
+                  ),
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 12),
                     child: Text(
                       "O inicia sesión con",
-                      style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w500),
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                  Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+                  Expanded(
+                    child: Divider(color: Colors.grey.shade300, thickness: 1),
+                  ),
                 ],
               ),
 
@@ -136,22 +203,30 @@ class _LoginScreenState extends State<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   _buildSocialCircle(
-                    icon: Icons.g_mobiledata_rounded, 
+                    icon: Icons.g_mobiledata_rounded,
                     color: Colors.red.shade700,
-                    onTap: () => {},
+                    onTap: _isLoading
+                        ? () {}
+                        : () => _iniciarSesionSocial(SocialProvider.google),
                   ),
                   const SizedBox(width: 25),
                   _buildSocialCircle(
                     icon: Icons.facebook,
                     color: const Color(0xFF1877F2),
-                    onTap: () => {},
+                    onTap: _isLoading
+                        ? () {}
+                        : () => _iniciarSesionSocial(SocialProvider.facebook),
                   ),
-                  const SizedBox(width: 25),
-                  _buildSocialCircle(
-                    icon: Icons.apple,
-                    color: Colors.black,
-                    onTap: () => {},
-                  ),
+                  if (showAppleSignIn) ...[
+                    const SizedBox(width: 25),
+                    _buildSocialCircle(
+                      icon: Icons.apple,
+                      color: Colors.black,
+                      onTap: _isLoading
+                          ? () {}
+                          : () => _iniciarSesionSocial(SocialProvider.apple),
+                    ),
+                  ],
                 ],
               ),
 
@@ -159,12 +234,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const CompleteProfileScreen()),
+                    MaterialPageRoute(
+                      builder: (context) => const CompleteProfileScreen(),
+                    ),
                   );
                 },
                 child: const Text(
                   "¿No tienes cuenta? Regístrate",
-                  style: TextStyle(color: Color(0xFF2BB8D1), fontWeight: FontWeight.w600, fontSize: 16,),
+                  style: TextStyle(
+                    color: Color(0xFF2BB8D1),
+                    fontWeight: FontWeight.w600,
+                    fontSize: 16,
+                  ),
                 ),
               ),
 
@@ -173,7 +254,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: const Text(
                   "¿Olvidaste tu contraseña?",
                   style: TextStyle(
-                    color: Color(0xFF2BB8D1), 
+                    color: Color(0xFF2BB8D1),
                     fontWeight: FontWeight.w600,
                     fontSize: 16,
                   ),
@@ -194,23 +275,23 @@ class _LoginScreenState extends State<LoginScreen> {
   }) {
     return TextField(
       controller: controller,
-      obscureText: isPassword ? _obscurePassword : false, 
+      obscureText: isPassword ? _obscurePassword : false,
       decoration: InputDecoration(
         hintText: hint,
         prefixIcon: Icon(icon, color: Colors.grey),
-        suffixIcon: isPassword 
-          ? IconButton(
-              icon: Icon(
-                _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                color: Colors.grey,
-              ),
-              onPressed: () {
-                setState(() {
-                  _obscurePassword = !_obscurePassword;
-                });
-              },
-            )
-          : null,
+        suffixIcon: isPassword
+            ? IconButton(
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                  color: Colors.grey,
+                ),
+                onPressed: () {
+                  setState(() {
+                    _obscurePassword = !_obscurePassword;
+                  });
+                },
+              )
+            : null,
         filled: true,
         fillColor: const Color(0xFFF5F5F5),
         border: OutlineInputBorder(
@@ -232,7 +313,9 @@ class _LoginScreenState extends State<LoginScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text("Ingresa tu correo y te enviaremos un enlace para restablecer tu clave."),
+            const Text(
+              "Ingresa tu correo y te enviaremos un enlace para restablecer tu clave.",
+            ),
             const SizedBox(height: 15),
             TextField(
               controller: resetController,
@@ -256,11 +339,13 @@ class _LoginScreenState extends State<LoginScreen> {
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF2BB8D1),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
             onPressed: () async {
               if (resetController.text.trim().isEmpty) return;
-              
+
               try {
                 await FirebaseAuth.instance.sendPasswordResetEmail(
                   email: resetController.text.trim(),
@@ -270,7 +355,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   _mostrarError("Enlace enviado. Revisa tu correo.");
                 }
               } catch (e) {
-                _mostrarError("Error: Asegúrate de que el correo sea correcto.");
+                _mostrarError(
+                  "Error: Asegúrate de que el correo sea correcto.",
+                );
               }
             },
             child: const Text("Enviar", style: TextStyle(color: Colors.white)),
@@ -303,11 +390,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ],
           border: Border.all(color: Colors.grey.shade100),
         ),
-        child: Icon(
-          icon,
-          size: 32,
-          color: color,
-        ),
+        child: Icon(icon, size: 32, color: color),
       ),
     );
   }

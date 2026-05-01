@@ -2,10 +2,11 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:firebase_auth/firebase_auth.dart'; 
-import 'package:cloud_firestore/cloud_firestore.dart'; 
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:tripmate_app/core/models/location_model.dart';
+import 'package:tripmate_app/features/locations/presentation/screens/location_picker_screen.dart';
 import 'package:tripmate_app/features/trips/presentation/screens/trip_results_screen.dart';
-import 'package:tripmate_app/core/constants/locations.dart'; 
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -18,62 +19,22 @@ class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _origenController = TextEditingController();
   final TextEditingController _destinoController = TextEditingController();
   DateTime _fechaSeleccionada = DateTime.now();
+  LocationData? _origenData;
+  LocationData? _destinoData;
 
   final String? _uid = FirebaseAuth.instance.currentUser?.uid;
-
-  void _mostrarSelectorCiudad(TextEditingController controller, String titulo) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-      ),
-      builder: (context) {
-        return Container(
-          height: MediaQuery.of(context).size.height * 0.7,
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            children: [
-              Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(10))),
-              const SizedBox(height: 20),
-              Text(titulo, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A4371))),
-              const SizedBox(height: 15),
-              Expanded(
-                child: ListView.separated(
-                  itemCount: ciudadesChile.length,
-                  separatorBuilder: (context, index) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    return ListTile(
-                      leading: const Icon(Icons.location_city_outlined, color: Color(0xFF2BB8D1)),
-                      title: Text(ciudadesChile[index], style: const TextStyle(fontSize: 16)),
-                      onTap: () {
-                        setState(() {
-                          controller.text = ciudadesChile[index];
-                        });
-                        Navigator.pop(context);
-                      },
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
 
   Future<void> _seleccionarFecha(BuildContext context) async {
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _fechaSeleccionada,
-      firstDate: DateTime.now(), 
-      lastDate: DateTime.now().add(const Duration(days: 365)), 
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF1A4371), 
+              primary: Color(0xFF1A4371),
               onPrimary: Colors.white,
             ),
           ),
@@ -88,6 +49,32 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _abrirSelectorMapa(
+    TextEditingController controller,
+    bool esOrigen,
+  ) async {
+    final seleccion = await Navigator.push<LocationData>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => LocationPickerScreen(
+          title: esOrigen ? "Origen exacto" : "Destino exacto",
+          initialLocation: esOrigen ? _origenData : _destinoData,
+        ),
+      ),
+    );
+
+    if (seleccion == null) return;
+
+    setState(() {
+      controller.text = seleccion.address;
+      if (esOrigen) {
+        _origenData = seleccion;
+      } else {
+        _destinoData = seleccion;
+      }
+    });
+  }
+
   @override
   void dispose() {
     _origenController.dispose();
@@ -97,7 +84,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final String fechaFormateada = DateFormat('dd MMM', 'es').format(_fechaSeleccionada);
+    final String fechaFormateada = DateFormat(
+      'dd MMM',
+      'es',
+    ).format(_fechaSeleccionada);
 
     return Material(
       color: Colors.white,
@@ -116,52 +106,64 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween, 
-                      crossAxisAlignment: CrossAxisAlignment.start, 
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Expanded(
                           child: StreamBuilder<DocumentSnapshot>(
-                            stream: FirebaseFirestore.instance.collection('users').doc(_uid).snapshots(),
+                            stream: FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(_uid)
+                                .snapshots(),
                             builder: (context, snapshot) {
                               String saludo = "¿Cuál es tu próximo viaje?";
                               if (snapshot.hasData && snapshot.data!.exists) {
-                                var data = snapshot.data!.data() as Map<String, dynamic>;
+                                var data =
+                                    snapshot.data!.data()
+                                        as Map<String, dynamic>;
                                 String nombreCompleto = data['nombre'] ?? "";
-                                String primerNombre = nombreCompleto.split(' ').first;
-                                saludo = "Hola, $primerNombre!\n¿A dónde vamos?";
+                                String primerNombre = nombreCompleto
+                                    .split(' ')
+                                    .first;
+                                saludo =
+                                    "Hola, $primerNombre!\n¿A dónde vamos?";
                               }
                               return Text(
                                 saludo,
                                 style: const TextStyle(
-                                  color: Colors.white, 
-                                  fontSize: 24, 
-                                  fontWeight: FontWeight.bold
+                                  color: Colors.white,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
                                 ),
                               );
                             },
                           ),
                         ),
-                        
-                        const SizedBox(width: 10), 
+
+                        const SizedBox(width: 10),
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(35), 
+                          borderRadius: BorderRadius.circular(35),
                           child: Image.asset(
-                            'assets/logo_tripmate.png', 
+                            'assets/logo_tripmate.png',
                             height: 70,
-                            width: 70, 
-                            fit: BoxFit.cover, 
-                            errorBuilder: (context, error, stackTrace) => const Icon(
-                              Icons.directions_car_filled, 
-                              size: 40, 
-                              color: Colors.white
-                            ),
+                            width: 70,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                const Icon(
+                                  Icons.directions_car_filled,
+                                  size: 40,
+                                  color: Colors.white,
+                                ),
                           ),
-                        )
+                        ),
                       ],
                     ),
                   ],
@@ -182,7 +184,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 color: Colors.white,
                 borderRadius: BorderRadius.circular(20),
                 boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 5)),
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    blurRadius: 10,
+                    offset: const Offset(0, 5),
+                  ),
                 ],
               ),
               child: Column(
@@ -190,55 +196,72 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   // Campo Origen con Selector
                   _buildSearchInput(
-                    icon: Icons.location_on_outlined, 
-                    hintText: "Origen", 
+                    icon: Icons.location_on_outlined,
+                    hintText: "Origen",
                     controller: _origenController,
-                    onTap: () => _mostrarSelectorCiudad(_origenController, "Selecciona Punto de Partida")
+                    onTap: () => _abrirSelectorMapa(_origenController, true),
                   ),
                   const Divider(height: 30),
-                  
+
                   _buildSearchInput(
-                    icon: Icons.location_on, 
-                    hintText: "Destino", 
+                    icon: Icons.location_on,
+                    hintText: "Destino",
                     controller: _destinoController,
-                    onTap: () => _mostrarSelectorCiudad(_destinoController, "Selecciona tu Destino")
+                    onTap: () => _abrirSelectorMapa(_destinoController, false),
                   ),
                   const Divider(height: 30),
-                  
+
                   Row(
                     children: [
                       Expanded(
                         child: _buildSearchInput(
-                          icon: Icons.calendar_today, 
+                          icon: Icons.calendar_today,
                           hintText: fechaFormateada,
-                          onTap: () => _seleccionarFecha(context)
+                          onTap: () => _seleccionarFecha(context),
                         ),
                       ),
                       const SizedBox(width: 10),
-                      Expanded(child: _buildSearchInput(icon: Icons.person_outline, hintText: "1")),
+                      Expanded(
+                        child: _buildSearchInput(
+                          icon: Icons.person_outline,
+                          hintText: "1",
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 25),
-                  
+
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFF05A28),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       onPressed: () {
                         Navigator.push(
-                          context, 
+                          context,
                           MaterialPageRoute(
                             builder: (context) => TripResultsScreen(
-                              destinoBusqueda: _destinoController.text.toLowerCase().trim()
-                            )
-                          )
+                              destinoBusqueda: _destinoController.text
+                                  .toLowerCase()
+                                  .trim(),
+                              destinoData: _destinoData,
+                            ),
+                          ),
                         );
                       },
-                      child: const Text("Buscar", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                      child: const Text(
+                        "Buscar",
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
                 ],
@@ -251,10 +274,10 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildSearchInput({
-    required IconData icon, 
-    required String hintText, 
+    required IconData icon,
+    required String hintText,
     TextEditingController? controller,
-    VoidCallback? onTap
+    VoidCallback? onTap,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -265,15 +288,15 @@ class _HomeScreenState extends State<HomeScreen> {
           const SizedBox(width: 15),
           Expanded(
             child: AbsorbPointer(
-              absorbing: onTap != null, 
+              absorbing: onTap != null,
               child: TextField(
                 controller: controller,
-                readOnly: onTap != null, 
+                readOnly: onTap != null,
                 decoration: InputDecoration(
-                  hintText: hintText, 
-                  border: InputBorder.none, 
+                  hintText: hintText,
+                  border: InputBorder.none,
                   contentPadding: EdgeInsets.zero,
-                  hintStyle: const TextStyle(color: Colors.black87)
+                  hintStyle: const TextStyle(color: Colors.black87),
                 ),
                 style: const TextStyle(fontSize: 16, color: Colors.black87),
               ),

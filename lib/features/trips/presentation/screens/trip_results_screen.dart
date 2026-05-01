@@ -4,31 +4,50 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:tripmate_app/core/models/location_model.dart';
+import 'package:tripmate_app/core/utils/geo_utils.dart';
 import 'package:tripmate_app/core/utils/formatters.dart';
+import 'package:tripmate_app/features/profile/presentation/screens/public_profile_screen.dart';
 import 'package:tripmate_app/features/trips/presentation/screens/trip_detail_screen.dart';
 
 class TripResultsScreen extends StatefulWidget {
   final String destinoBusqueda;
   final int pasajerosBuscados;
-  
-  const TripResultsScreen({super.key, required this.destinoBusqueda, this.pasajerosBuscados = 1});
+  final LocationData? destinoData;
+
+  const TripResultsScreen({
+    super.key,
+    required this.destinoBusqueda,
+    this.pasajerosBuscados = 1,
+    this.destinoData,
+  });
 
   @override
   State<TripResultsScreen> createState() => _TripResultsScreenState();
 }
 
 class _TripResultsScreenState extends State<TripResultsScreen> {
-  
-  String _cap(String? s) => (s == null || s.isEmpty) ? '' : s[0].toUpperCase() + s.substring(1).toLowerCase();
+  String _cap(String? s) => (s == null || s.isEmpty)
+      ? ''
+      : s[0].toUpperCase() + s.substring(1).toLowerCase();
 
   String _formatearFecha(Timestamp? timestamp) {
     if (timestamp == null) return "Fecha no disponible";
     return DateFormat('E, dd MMM - HH:mm', 'es').format(timestamp.toDate());
   }
 
+  String _locationText(dynamic location) {
+    if (location == null) return "";
+    if (location is Map) return (location['address'] ?? '').toString();
+    return location.toString();
+  }
+
   Future<Map<String, dynamic>?> _getDriverData(String uid) async {
     try {
-      DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+      DocumentSnapshot userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
       return userDoc.data() as Map<String, dynamic>?;
     } catch (e) {
       return null;
@@ -38,8 +57,10 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
   @override
   Widget build(BuildContext context) {
     final bool esBusquedaGeneral = widget.destinoBusqueda.isEmpty;
-    
-    final DateTime limiteVigencia = DateTime.now().subtract(const Duration(minutes: 10));
+
+    final DateTime limiteVigencia = DateTime.now().subtract(
+      const Duration(minutes: 10),
+    );
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -59,12 +80,21 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(esBusquedaGeneral ? Icons.explore : Icons.location_on, 
-                   color: const Color(0xFF1A4371), size: 18),
+              Icon(
+                esBusquedaGeneral ? Icons.explore : Icons.location_on,
+                color: const Color(0xFF1A4371),
+                size: 18,
+              ),
               const SizedBox(width: 8),
               Text(
-                esBusquedaGeneral ? "Todos los destinos" : _cap(widget.destinoBusqueda),
-                style: const TextStyle(color: Colors.black, fontSize: 14, fontWeight: FontWeight.w600),
+                esBusquedaGeneral
+                    ? "Todos los destinos"
+                    : _cap(widget.destinoBusqueda),
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ],
           ),
@@ -76,14 +106,18 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12.0),
             child: Text(
-              esBusquedaGeneral 
-                ? "Viajes disponibles ahora" 
-                : "Viajes a ${_cap(widget.destinoBusqueda)} disponibles", 
-              style: TextStyle(color: Colors.grey[600], fontSize: 13, fontWeight: FontWeight.w500)
+              esBusquedaGeneral
+                  ? "Viajes disponibles ahora"
+                  : "Viajes a ${_cap(widget.destinoBusqueda)} disponibles",
+              style: TextStyle(
+                color: Colors.grey[600],
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
           const Divider(thickness: 1, height: 1),
-          
+
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
@@ -93,9 +127,11 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return const Center(child: Text("Error al conectar con la cartelera"));
+                  return const Center(
+                    child: Text("Error al conectar con la cartelera"),
+                  );
                 }
-                
+
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
@@ -104,16 +140,33 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
 
                 final docs = snapshot.data!.docs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;
-                  
+
                   final String driverId = data['driverId'] ?? '';
                   final String estado = data['estado'] ?? 'disponible';
-                  final String destinoTrip = (data['destino'] ?? '').toString().toLowerCase().trim();
-                  final String busqueda = widget.destinoBusqueda.toLowerCase().trim();
-                  
+                  final String destinoTrip = _locationText(
+                    data['destino'],
+                  ).toLowerCase().trim();
+                  final String busqueda = widget.destinoBusqueda
+                      .toLowerCase()
+                      .trim();
+
                   bool noEsMio = driverId != miUid;
                   bool estaDisponible = estado == 'disponible';
-                  bool coincideDestino = busqueda.isEmpty || destinoTrip.contains(busqueda);
-                  
+                  bool coincideDestino =
+                      busqueda.isEmpty || destinoTrip.contains(busqueda);
+
+                  if (widget.destinoData != null && data['destino'] is Map) {
+                    final destinoViaje = LocationData.fromMap(
+                      Map<String, dynamic>.from(data['destino']),
+                    );
+                    coincideDestino =
+                        GeoUtils.calcularDistancia(
+                          widget.destinoData!,
+                          destinoViaje,
+                        ) <=
+                        10;
+                  }
+
                   return noEsMio && estaDisponible && coincideDestino;
                 }).toList();
 
@@ -127,13 +180,16 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
                   itemBuilder: (context, index) {
                     final doc = docs[index];
                     final tripData = doc.data() as Map<String, dynamic>;
-                    tripData['tripId'] = doc.id; 
+                    tripData['tripId'] = doc.id;
 
                     return GestureDetector(
                       onTap: () {
                         Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (context) => TripDetailScreen(tripData: tripData)),
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                TripDetailScreen(tripData: tripData),
+                          ),
                         );
                       },
                       child: _buildTripCard(tripData),
@@ -156,9 +212,9 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
           Icon(Icons.timer_off_outlined, size: 80, color: Colors.grey[200]),
           const SizedBox(height: 16),
           Text(
-            general 
-              ? "No hay viajes programados para hoy." 
-              : "No hay viajes próximos hacia este destino.",
+            general
+                ? "No hay viajes programados para hoy."
+                : "No hay viajes próximos hacia este destino.",
             textAlign: TextAlign.center,
             style: const TextStyle(color: Colors.grey, fontSize: 15),
           ),
@@ -185,7 +241,7 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
     String driverId = trip['driverId'] ?? '';
     Timestamp? fechaSalida = trip['fechaSalida'];
 
-    int pasajerosRequeridos = widget.pasajerosBuscados; 
+    int pasajerosRequeridos = widget.pasajerosBuscados;
     bool hayCuposSuficientes = asientosDisponibles >= pasajerosRequeridos;
 
     return Container(
@@ -218,15 +274,31 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
 
                     return Column(
                       children: [
-                        CircleAvatar(
-                          radius: 35,
-                          backgroundColor: Colors.white,
-                          backgroundImage: (fotoUrl != null && fotoUrl.isNotEmpty)
-                              ? NetworkImage(fotoUrl)
-                              : null,
-                          child: (fotoUrl == null || fotoUrl.isEmpty)
-                              ? const Icon(Icons.person, color: Color(0xFF1A4371), size: 40)
-                              : null,
+                        GestureDetector(
+                          onTap: driverId.isEmpty
+                              ? null
+                              : () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) =>
+                                        PublicProfileScreen(userId: driverId),
+                                  ),
+                                ),
+                          child: CircleAvatar(
+                            radius: 35,
+                            backgroundColor: Colors.white,
+                            backgroundImage:
+                                (fotoUrl != null && fotoUrl.isNotEmpty)
+                                ? NetworkImage(fotoUrl)
+                                : null,
+                            child: (fotoUrl == null || fotoUrl.isEmpty)
+                                ? const Icon(
+                                    Icons.person,
+                                    color: Color(0xFF1A4371),
+                                    size: 40,
+                                  )
+                                : null,
+                          ),
                         ),
                         const SizedBox(height: 8),
                         SizedBox(
@@ -246,7 +318,7 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
                   },
                 ),
                 const SizedBox(width: 20),
-                
+
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -264,21 +336,28 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
                               color: Color(0xFFF05A28),
                             ),
                           ),
-                          
+
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
                                 decoration: BoxDecoration(
-                                  color: hayCuposSuficientes ? Colors.white12 : Colors.redAccent.withOpacity(0.2),
+                                  color: hayCuposSuficientes
+                                      ? Colors.white12
+                                      : Colors.redAccent.withOpacity(0.2),
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Row(
                                   children: [
                                     Icon(
                                       Icons.event_seat,
-                                      color: hayCuposSuficientes ? const Color(0xFF2BB8D1) : Colors.redAccent,
+                                      color: hayCuposSuficientes
+                                          ? const Color(0xFF2BB8D1)
+                                          : Colors.redAccent,
                                       size: 14,
                                     ),
                                     const SizedBox(width: 4),
@@ -286,7 +365,9 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
                                       "$asientosDisponibles",
                                       style: TextStyle(
                                         fontWeight: FontWeight.bold,
-                                        color: hayCuposSuficientes ? Colors.white : Colors.redAccent,
+                                        color: hayCuposSuficientes
+                                            ? Colors.white
+                                            : Colors.redAccent,
                                         fontSize: 12,
                                       ),
                                     ),
@@ -309,21 +390,36 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
                           ),
                         ],
                       ),
-                      
+
                       const SizedBox(height: 5),
                       Text(
                         _formatearFecha(fechaSalida),
-                        style: const TextStyle(color: Colors.white70, fontSize: 11),
+                        style: const TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                        ),
                       ),
                       const SizedBox(height: 15),
-                      
+
                       Row(
                         children: [
                           Column(
                             children: [
-                              const Icon(Icons.circle, color: Color(0xFF2BB8D1), size: 10),
-                              Container(width: 1, height: 15, color: Colors.white24),
-                              const Icon(Icons.location_on, color: Color(0xFFF05A28), size: 12),
+                              const Icon(
+                                Icons.circle,
+                                color: Color(0xFF2BB8D1),
+                                size: 10,
+                              ),
+                              Container(
+                                width: 1,
+                                height: 15,
+                                color: Colors.white24,
+                              ),
+                              const Icon(
+                                Icons.location_on,
+                                color: Color(0xFFF05A28),
+                                size: 12,
+                              ),
                             ],
                           ),
                           const SizedBox(width: 12),
@@ -331,7 +427,13 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(origen, style: const TextStyle(color: Colors.white, fontSize: 13)),
+                                Text(
+                                  origen,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 13,
+                                  ),
+                                ),
                                 const SizedBox(height: 8),
                                 Text(
                                   destino,
@@ -358,9 +460,16 @@ class _TripResultsScreenState extends State<TripResultsScreen> {
               children: [
                 Text(
                   "🚗 Ver detalles del vehículo",
-                  style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10),
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.5),
+                    fontSize: 10,
+                  ),
                 ),
-                const Icon(Icons.arrow_forward_ios, color: Colors.white24, size: 12),
+                const Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.white24,
+                  size: 12,
+                ),
               ],
             ),
           ],
