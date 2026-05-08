@@ -7,10 +7,12 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:tripmate_app/core/constants/legal_constants.dart';
-import 'package:tripmate_app/core/utils/validators.dart'; 
+import 'package:tripmate_app/core/utils/validators.dart';
 import 'dart:io';
 
 import 'package:tripmate_app/features/trips/presentation/screens/main_navegation_screen.dart';
+
+class _TelefonoYaRegistradoException implements Exception {}
 
 class CompleteProfileScreen extends StatefulWidget {
   const CompleteProfileScreen({super.key});
@@ -25,15 +27,15 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  
-  DateTime? _fechaNacimiento; 
+
+  DateTime? _fechaNacimiento;
   bool aceptaCondiciones = false;
-  bool obscurePassword = true; 
+  bool obscurePassword = true;
   String? generoSeleccionado;
   bool isLoading = false;
 
-  File? _imagenSeleccionada; 
-  File? _imagenCarnet; 
+  File? _imagenSeleccionada;
+  File? _imagenCarnet;
   final ImagePicker _picker = ImagePicker();
 
   @override
@@ -47,7 +49,9 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   }
 
   bool _isPasswordValid(String password) {
-    final passwordRegExp = RegExp(r'^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$&*~]).{8,}$');
+    final passwordRegExp = RegExp(
+      r'^(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#\$&*~]).{8,}$',
+    );
     return passwordRegExp.hasMatch(password);
   }
 
@@ -62,7 +66,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF1A4371), 
+              primary: Color(0xFF1A4371),
               onPrimary: Colors.white,
               onSurface: Color(0xFF1A4371),
             ),
@@ -86,11 +90,11 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.gallery,
-        maxWidth: 512, 
+        maxWidth: 512,
         maxHeight: 512,
-        imageQuality: 80, 
+        imageQuality: 80,
       );
-      
+
       if (image != null) {
         setState(() {
           if (esPerfil) {
@@ -107,7 +111,10 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
   Future<String?> _subirArchivo(File file, String folder, String uid) async {
     try {
-      final storageRef = FirebaseStorage.instance.ref().child(folder).child('$uid.jpg');
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child(folder)
+          .child('$uid.jpg');
       TaskSnapshot snapshot = await storageRef.putFile(file);
       return await snapshot.ref.getDownloadURL();
     } catch (e) {
@@ -115,44 +122,91 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     }
   }
 
+  String _normalizarTelefono(String telefono) {
+    return telefono.replaceAll(RegExp(r'\D'), '');
+  }
+
+  Future<void> _reservarTelefono(String telefono, String uid) async {
+    final phoneRef = FirebaseFirestore.instance
+        .collection('phone_numbers')
+        .doc(telefono);
+
+    await FirebaseFirestore.instance.runTransaction((transaction) async {
+      final phoneDoc = await transaction.get(phoneRef);
+      if (phoneDoc.exists) {
+        throw _TelefonoYaRegistradoException();
+      }
+
+      transaction.set(phoneRef, {
+        'uid': uid,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  Future<void> _eliminarUsuarioCreado(User? user) async {
+    try {
+      await user?.delete();
+    } catch (_) {
+      // La cuenta puede requerir limpieza manual si Firebase rechaza el delete.
+    }
+  }
+
   Future<void> _registrarUsuario() async {
     String email = _emailController.text.trim();
     String password = _passwordController.text.trim();
-    String telefono = _phoneController.text.trim();
+    String telefono = _normalizarTelefono(_phoneController.text);
 
-    if (_imagenSeleccionada == null) return _mostrarError("Por favor, sube tu foto de perfil");
-    if (_imagenCarnet == null) return _mostrarError("Por favor, sube la foto de tu carnet");
-    if (_nombreController.text.trim().isEmpty) return _mostrarError("Ingresa tu nombre");
-    if (!TripMateValidators.validarRutChileno(_rutController.text)) return _mostrarError("RUT no válido");
-    if (telefono.length < 9) return _mostrarError("Ingresa un teléfono válido (9 dígitos)");
-    if (generoSeleccionado == null) return _mostrarError("Selecciona tu género");
-    if (_fechaNacimiento == null) return _mostrarError("Selecciona tu fecha de nacimiento");
-    if (!_isPasswordValid(password)) return _mostrarError("Contraseña debe tener 8+ caracteres, Mayúscula, Número y Símbolo");
+    if (_imagenSeleccionada == null) {
+      return _mostrarError("Por favor, sube tu foto de perfil");
+    }
+    if (_imagenCarnet == null) {
+      return _mostrarError("Por favor, sube la foto de tu carnet");
+    }
+    if (_nombreController.text.trim().isEmpty) {
+      return _mostrarError("Ingresa tu nombre");
+    }
+    if (!TripMateValidators.validarRutChileno(_rutController.text)) {
+      return _mostrarError("RUT no válido");
+    }
+    if (telefono.length < 9) {
+      return _mostrarError("Ingresa un teléfono válido (9 dígitos)");
+    }
+    if (generoSeleccionado == null) {
+      return _mostrarError("Selecciona tu género");
+    }
+    if (_fechaNacimiento == null) {
+      return _mostrarError("Selecciona tu fecha de nacimiento");
+    }
+    if (!_isPasswordValid(password)) {
+      return _mostrarError(
+        "Contraseña debe tener 8+ caracteres, Mayúscula, Número y Símbolo",
+      );
+    }
     if (!aceptaCondiciones) return _mostrarError("Debes aceptar los términos");
 
     setState(() => isLoading = true);
 
+    User? usuarioCreado;
+
     try {
-      final phoneCheck = await FirebaseFirestore.instance
-          .collection('users')
-          .where('telefono', isEqualTo: telefono)
-          .get();
+      UserCredential userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
 
-      if (phoneCheck.docs.isNotEmpty) {
-        _mostrarError("Este número ya está registrado");
-        setState(() => isLoading = false);
-        return;
-      }
+      usuarioCreado = userCredential.user;
+      String uid = usuarioCreado!.uid;
+      await _reservarTelefono(telefono, uid);
 
-      UserCredential userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
+      String? fotoUrl = await _subirArchivo(
+        _imagenSeleccionada!,
+        'user_photos',
+        uid,
       );
-
-      String uid = userCredential.user!.uid;
-
-      String? fotoUrl = await _subirArchivo(_imagenSeleccionada!, 'user_photos', uid);
-      String? carnetUrl = await _subirArchivo(_imagenCarnet!, 'user_id_documents', uid);
+      String? carnetUrl = await _subirArchivo(
+        _imagenCarnet!,
+        'user_id_documents',
+        uid,
+      );
 
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'uid': uid,
@@ -164,7 +218,7 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         'fechaNacimiento': _fechaNacimiento,
         'photoUrl': fotoUrl,
         'idDocumentUrl': carnetUrl,
-        'isVerified': false, 
+        'isVerified': false,
         'createdAt': FieldValue.serverTimestamp(),
         'rol': 'user',
       });
@@ -174,10 +228,22 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         MaterialPageRoute(builder: (context) => const MainNavigationScreen()),
         (route) => false,
       );
-
     } on FirebaseAuthException catch (e) {
       _mostrarError(e.message ?? "Error al registrar");
+    } on _TelefonoYaRegistradoException {
+      await _eliminarUsuarioCreado(usuarioCreado);
+      _mostrarError("Este número ya está registrado");
+    } on FirebaseException catch (e) {
+      await _eliminarUsuarioCreado(usuarioCreado);
+      if (e.plugin == 'cloud_firestore' && e.code == 'permission-denied') {
+        _mostrarError(
+          "No tienes permisos para completar el registro. Revisa las reglas de Firestore.",
+        );
+      } else {
+        _mostrarError(e.message ?? "Error al registrar");
+      }
     } catch (e) {
+      await _eliminarUsuarioCreado(usuarioCreado);
       _mostrarError("Error inesperado: $e");
     } finally {
       if (mounted) setState(() => isLoading = false);
@@ -186,10 +252,13 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
 
   void _mostrarError(String mensaje) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(mensaje), backgroundColor: Colors.redAccent, behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Text(mensaje),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
-
 
   void _mostrarLegales(BuildContext context) {
     showDialog(
@@ -198,14 +267,21 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
         return DefaultTabController(
           length: 2,
           child: AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
             titlePadding: EdgeInsets.zero,
             title: Column(
               children: [
                 const Padding(
                   padding: EdgeInsets.only(top: 20, bottom: 10),
-                  child: Text("Información Legal", 
-                    style: TextStyle(color: Color(0xFF1A4371), fontWeight: FontWeight.bold)),
+                  child: Text(
+                    "Información Legal",
+                    style: TextStyle(
+                      color: Color(0xFF1A4371),
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
                 const TabBar(
                   labelColor: Color(0xFF2BB8D1),
@@ -220,16 +296,16 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
             ),
             content: SizedBox(
               width: double.maxFinite,
-              height: MediaQuery.of(context).size.height * 0.5, 
+              height: MediaQuery.of(context).size.height * 0.5,
               child: TabBarView(
                 children: [
                   _seccionLegal(
-                    titulo: "TÉRMINOS Y CONDICIONES", 
-                    contenido: TripMateLegales.terminosYCondiciones 
+                    titulo: "TÉRMINOS Y CONDICIONES",
+                    contenido: TripMateLegales.terminosYCondiciones,
                   ),
                   _seccionLegal(
-                    titulo: "POLÍTICA DE PRIVACIDAD", 
-                    contenido: TripMateLegales.politicaPrivacidad 
+                    titulo: "POLÍTICA DE PRIVACIDAD",
+                    contenido: TripMateLegales.politicaPrivacidad,
                   ),
                 ],
               ),
@@ -237,7 +313,13 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text("CERRAR", style: TextStyle(color: Color(0xFFF05A28), fontWeight: FontWeight.bold)),
+                child: const Text(
+                  "CERRAR",
+                  style: TextStyle(
+                    color: Color(0xFFF05A28),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),
@@ -252,9 +334,15 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(titulo, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+          Text(
+            titulo,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
           const SizedBox(height: 10),
-          Text(contenido, style: const TextStyle(fontSize: 13, color: Colors.black87)),
+          Text(
+            contenido,
+            style: const TextStyle(fontSize: 13, color: Colors.black87),
+          ),
         ],
       ),
     );
@@ -265,8 +353,16 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white, elevation: 0, centerTitle: true,
-        title: const Text("Completa tu perfil", style: TextStyle(color: Color(0xFF1A4371), fontWeight: FontWeight.bold)),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          "Completa tu perfil",
+          style: TextStyle(
+            color: Color(0xFF1A4371),
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -274,47 +370,74 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
           child: Column(
             children: [
               const SizedBox(height: 20),
-              
+
               Center(
                 child: GestureDetector(
-                  onTap: () => _seleccionarImagen(true), 
+                  onTap: () => _seleccionarImagen(true),
                   child: Stack(
                     children: [
                       CircleAvatar(
                         radius: 60,
                         backgroundColor: const Color(0xFFF1F4F8),
-                        backgroundImage: _imagenSeleccionada != null ? FileImage(_imagenSeleccionada!) : null,
-                        child: _imagenSeleccionada == null 
-                            ? const Icon(Icons.add_a_photo_outlined, size: 40, color: Color(0xFF1A4371))
+                        backgroundImage: _imagenSeleccionada != null
+                            ? FileImage(_imagenSeleccionada!)
+                            : null,
+                        child: _imagenSeleccionada == null
+                            ? const Icon(
+                                Icons.add_a_photo_outlined,
+                                size: 40,
+                                color: Color(0xFF1A4371),
+                              )
                             : null,
                       ),
                       Positioned(
-                        bottom: 0, right: 0,
+                        bottom: 0,
+                        right: 0,
                         child: Container(
                           padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(color: Color(0xFFF05A28), shape: BoxShape.circle),
-                          child: const Icon(Icons.edit, color: Colors.white, size: 18),
+                          decoration: const BoxDecoration(
+                            color: Color(0xFFF05A28),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.edit,
+                            color: Colors.white,
+                            size: 18,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 30),
 
               _buildFieldLabel("Nombre completo"),
-              _buildTextField(controller: _nombreController, hint: "Ej: Juan Pérez", icon: Icons.person_outline),
+              _buildTextField(
+                controller: _nombreController,
+                hint: "Ej: Juan Pérez",
+                icon: Icons.person_outline,
+              ),
 
               const SizedBox(height: 15),
 
               _buildFieldLabel("R.U.T"),
-              _buildTextField(controller: _rutController, hint: "12.345.678-9", icon: Icons.badge_outlined),
+              _buildTextField(
+                controller: _rutController,
+                hint: "12.345.678-9",
+                icon: Icons.badge_outlined,
+              ),
 
               const SizedBox(height: 15),
 
               _buildFieldLabel("Teléfono Móvil"),
-              _buildTextField(controller: _phoneController, hint: "912345678", icon: Icons.phone_iphone, keyboardType: TextInputType.phone),
+              _buildTextField(
+                controller: _phoneController,
+                hint: "912345678",
+                icon: Icons.phone_iphone,
+                keyboardType: TextInputType.phone,
+              ),
 
               const SizedBox(height: 15),
 
@@ -322,19 +445,37 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               InkWell(
                 onTap: () => _seleccionarImagen(false),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 15,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8F9FB),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _imagenCarnet != null ? Colors.green : Colors.transparent),
+                    border: Border.all(
+                      color: _imagenCarnet != null
+                          ? Colors.green
+                          : Colors.transparent,
+                    ),
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.camera_front, color: _imagenCarnet != null ? Colors.green : const Color(0xFF2BB8D1)),
+                      Icon(
+                        Icons.camera_front,
+                        color: _imagenCarnet != null
+                            ? Colors.green
+                            : const Color(0xFF2BB8D1),
+                      ),
                       const SizedBox(width: 12),
                       Text(
-                        _imagenCarnet != null ? "¡Carnet cargado!" : "Subir foto frontal carnet",
-                        style: TextStyle(color: _imagenCarnet != null ? Colors.green : Colors.grey),
+                        _imagenCarnet != null
+                            ? "¡Carnet cargado!"
+                            : "Subir foto frontal carnet",
+                        style: TextStyle(
+                          color: _imagenCarnet != null
+                              ? Colors.green
+                              : Colors.grey,
+                        ),
                       ),
                     ],
                   ),
@@ -344,7 +485,12 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               const SizedBox(height: 15),
 
               _buildFieldLabel("Correo electrónico"),
-              _buildTextField(controller: _emailController, hint: "correo@ejemplo.com", icon: Icons.email_outlined, keyboardType: TextInputType.emailAddress),
+              _buildTextField(
+                controller: _emailController,
+                hint: "correo@ejemplo.com",
+                icon: Icons.email_outlined,
+                keyboardType: TextInputType.emailAddress,
+              ),
 
               const SizedBox(height: 15),
 
@@ -352,14 +498,16 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               DropdownButtonFormField<String>(
                 value: generoSeleccionado,
                 // Asegura que el fondo del menú desplegable sea blanco
-                dropdownColor: Colors.white, 
+                dropdownColor: Colors.white,
                 decoration: _inputDecoration(Icons.wc_outlined).copyWith(
                   hintText: "Selecciona tu género",
                   hintStyle: const TextStyle(color: Colors.grey),
                 ),
                 // Esto controla cómo se ve el texto DESPUÉS de seleccionar una opción
                 selectedItemBuilder: (BuildContext context) {
-                  return ["Masculino", "Femenino", "Otros"].map<Widget>((String item) {
+                  return ["Masculino", "Femenino", "Otros"].map<Widget>((
+                    String item,
+                  ) {
                     return Text(
                       item,
                       style: const TextStyle(
@@ -375,7 +523,10 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                     value: e,
                     child: Text(
                       e,
-                      style: const TextStyle(color: Colors.black87, fontSize: 16),
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontSize: 16,
+                      ),
                     ),
                   );
                 }).toList(),
@@ -392,17 +543,33 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               GestureDetector(
                 onTap: () => _seleccionarFecha(context),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-                  decoration: BoxDecoration(color: const Color(0xFFF8F9FB), borderRadius: BorderRadius.circular(12)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 15,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8F9FB),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Row(
                     children: [
-                      const Icon(Icons.calendar_month_outlined, color: Color(0xFF2BB8D1)),
+                      const Icon(
+                        Icons.calendar_month_outlined,
+                        color: Color(0xFF2BB8D1),
+                      ),
                       const SizedBox(width: 12),
                       Text(
-                        _fechaNacimiento == null 
-                            ? "Selecciona tu fecha" 
-                            : DateFormat('dd / MM / yyyy').format(_fechaNacimiento!),
-                        style: TextStyle(color: _fechaNacimiento == null ? Colors.grey : Colors.black87, fontSize: 16),
+                        _fechaNacimiento == null
+                            ? "Selecciona tu fecha"
+                            : DateFormat(
+                                'dd / MM / yyyy',
+                              ).format(_fechaNacimiento!),
+                        style: TextStyle(
+                          color: _fechaNacimiento == null
+                              ? Colors.grey
+                              : Colors.black87,
+                          fontSize: 16,
+                        ),
                       ),
                     ],
                   ),
@@ -414,12 +581,16 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
               _buildFieldLabel("Contraseña"),
               TextField(
                 controller: _passwordController,
-                obscureText: obscurePassword, 
+                obscureText: obscurePassword,
                 decoration: _inputDecoration(Icons.lock_outline).copyWith(
                   hintText: "8+ carac, Mayús y Símbolo",
                   suffixIcon: IconButton(
-                    icon: Icon(obscurePassword ? Icons.visibility_off : Icons.visibility, color: Colors.grey),
-                    onPressed: () => setState(() => obscurePassword = !obscurePassword),
+                    icon: Icon(
+                      obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      color: Colors.grey,
+                    ),
+                    onPressed: () =>
+                        setState(() => obscurePassword = !obscurePassword),
                   ),
                 ),
               ),
@@ -431,14 +602,20 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                   Checkbox(
                     value: aceptaCondiciones,
                     activeColor: const Color(0xFF1A4371),
-                    onChanged: (v) => setState(() => aceptaCondiciones = v ?? false),
+                    onChanged: (v) =>
+                        setState(() => aceptaCondiciones = v ?? false),
                   ),
                   Expanded(
                     child: GestureDetector(
-                      onTap: () => _mostrarLegales(context), // <--- Llamamos a la nueva función
+                      onTap: () => _mostrarLegales(
+                        context,
+                      ), // <--- Llamamos a la nueva función
                       child: RichText(
                         text: TextSpan(
-                          style: const TextStyle(fontSize: 12, color: Colors.black87),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.black87,
+                          ),
                           children: [
                             const TextSpan(text: "Acepto los "),
                             TextSpan(
@@ -476,11 +653,20 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFF05A28),
                     elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
                   ),
-                  child: isLoading 
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text("CREAR MI CUENTA", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  child: isLoading
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Text(
+                          "CREAR MI CUENTA",
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(height: 40),
@@ -496,7 +682,14 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       padding: const EdgeInsets.only(bottom: 8.0),
       child: Align(
         alignment: Alignment.centerLeft,
-        child: Text(label, style: const TextStyle(color: Color(0xFF1A4371), fontWeight: FontWeight.bold, fontSize: 13)),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF1A4371),
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
+        ),
       ),
     );
   }
@@ -507,16 +700,23 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
       filled: true,
       fillColor: const Color(0xFFF8F9FB),
       contentPadding: const EdgeInsets.symmetric(vertical: 15),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
     );
   }
 
-  Widget _buildTextField({required TextEditingController controller, required String hint, required IconData icon, TextInputType? keyboardType}) {
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String hint,
+    required IconData icon,
+    TextInputType? keyboardType,
+  }) {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
       decoration: _inputDecoration(icon).copyWith(hintText: hint),
     );
   }
-
 }

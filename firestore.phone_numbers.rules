@@ -1,0 +1,13 @@
+// Agrega este bloque dentro de tus reglas actuales, antes de:
+// match /{document=**} {
+//
+// Usa la funcion signedIn() que ya existe en tus reglas.
+
+match /phone_numbers/{phoneNumber} {
+  allow get: if signedIn();
+  allow create: if signedIn()
+    && !exists(/databases/$(database)/documents/phone_numbers/$(phoneNumber))
+    && request.resource.data.uid == request.auth.uid
+    && request.resource.data.keys().hasOnly(['uid', 'createdAt']);
+  allow update, delete, list: if false;
+}

@@ -100,6 +100,10 @@ class _HomeScreenState extends State<HomeScreen> {
       'dd MMM',
       'es',
     ).format(_fechaSeleccionada);
+    final mediaQuery = MediaQuery.of(context);
+    final safeTop = mediaQuery.padding.top;
+    final cardTop = safeTop + 190;
+    final headerHeight = cardTop + 145;
 
     return Material(
       color: Colors.white,
@@ -107,7 +111,7 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           // Fondo azul superior
           Container(
-            height: MediaQuery.of(context).size.height * 0.3,
+            height: headerHeight,
             width: double.infinity,
             decoration: const BoxDecoration(
               color: Color(0xFF1A4371),
@@ -119,8 +123,8 @@ class _HomeScreenState extends State<HomeScreen> {
             child: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
+                  horizontal: 24,
+                  vertical: 18,
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -136,7 +140,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                 .doc(_uid)
                                 .snapshots(),
                             builder: (context, snapshot) {
-                              String saludo = "¿Cuál es tu próximo viaje?";
                               if (snapshot.hasData && snapshot.data!.exists) {
                                 var data =
                                     snapshot.data!.data()
@@ -145,28 +148,20 @@ class _HomeScreenState extends State<HomeScreen> {
                                 String primerNombre = nombreCompleto
                                     .split(' ')
                                     .first;
-                                saludo =
-                                    "Hola, $primerNombre!\n¿A dónde vamos?";
+                                return _buildHeaderGreeting(primerNombre);
                               }
-                              return Text(
-                                saludo,
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              );
+                              return _buildHeaderFallback();
                             },
                           ),
                         ),
 
                         const SizedBox(width: 10),
                         ClipRRect(
-                          borderRadius: BorderRadius.circular(35),
+                          borderRadius: BorderRadius.circular(36),
                           child: Image.asset(
                             'assets/logo_tripmate.png',
-                            height: 70,
-                            width: 70,
+                            height: 72,
+                            width: 72,
                             fit: BoxFit.cover,
                             errorBuilder: (context, error, stackTrace) =>
                                 const Icon(
@@ -185,11 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
 
           Padding(
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).size.height * 0.18,
-              left: 20,
-              right: 20,
-            ),
+            padding: EdgeInsets.only(top: cardTop, left: 20, right: 20),
             child: Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
@@ -322,6 +313,50 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildHeaderGreeting(String primerNombre) {
+    const titleStyle = TextStyle(
+      color: Colors.white,
+      fontSize: 26,
+      height: 1.2,
+      fontWeight: FontWeight.bold,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Hola, $primerNombre!",
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: titleStyle,
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text("¿A dónde vamos?", style: titleStyle),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHeaderFallback() {
+    return const Text(
+      "¿Cuál es tu próximo viaje?",
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        color: Colors.white,
+        fontSize: 26,
+        height: 1.2,
+        fontWeight: FontWeight.bold,
+      ),
     );
   }
 }
