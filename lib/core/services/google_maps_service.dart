@@ -120,8 +120,25 @@ class GoogleMapsService {
   }
 
   static Future<String> obtenerDireccion(double lat, double lng) async {
+    final addressInChile = await _obtenerDireccionGeocode(
+      lat,
+      lng,
+      restrictToChile: true,
+    );
+
+    if (!esDireccionGenerica(addressInChile)) return addressInChile;
+
+    return _obtenerDireccionGeocode(lat, lng);
+  }
+
+  static Future<String> _obtenerDireccionGeocode(
+    double lat,
+    double lng, {
+    bool restrictToChile = false,
+  }) async {
+    final countryFilter = restrictToChile ? '&components=country:CL' : '';
     final url =
-        "https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$_apiKey&language=es&components=country:CL";
+        "https://maps.googleapis.com/maps/api/geocode/json?latlng=$lat,$lng&key=$_apiKey&language=es$countryFilter";
     final response = await http.get(Uri.parse(url));
     if (response.statusCode != 200) return "Ubicación seleccionada";
 
@@ -147,12 +164,61 @@ class GoogleMapsService {
       return "Ubicación seleccionada";
     }
 
-    return formattedAddress;
+    return _shortAddress(specificResult, formattedAddress);
+  }
+
+  static String _shortAddress(
+    Map<String, dynamic> result,
+    String formattedAddress,
+  ) {
+    final components = result['address_components'] as List<dynamic>? ?? [];
+    String? streetNumber;
+    String? route;
+    String? city;
+
+    for (final component in components) {
+      if (component is! Map<String, dynamic>) continue;
+
+      final types = List<String>.from(component['types'] ?? []);
+      final name = (component['long_name'] ?? '').toString().trim();
+      if (name.isEmpty) continue;
+
+      if (types.contains('street_number')) {
+        streetNumber = name;
+      } else if (types.contains('route')) {
+        route = name;
+      } else if (city == null &&
+          (types.contains('locality') ||
+              types.contains('administrative_area_level_3') ||
+              types.contains('administrative_area_level_2'))) {
+        city = name;
+      }
+    }
+
+    final street = [
+      route,
+      streetNumber,
+    ].where((part) => part != null && part.isNotEmpty).join(' ');
+
+    if (street.isNotEmpty && city != null && city.isNotEmpty) {
+      return "$street, $city";
+    }
+    if (street.isNotEmpty) return street;
+
+    final parts = formattedAddress
+        .split(',')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty && !RegExp(r'^\d{5,}$').hasMatch(part))
+        .toList();
+
+    if (parts.length >= 2) return "${parts[0]}, ${parts[1]}";
+    return parts.isNotEmpty ? parts.first : formattedAddress;
   }
 
   static bool esDireccionGenerica(String address) {
     final normalized = address.trim().toLowerCase();
     return normalized.isEmpty ||
+        normalized.startsWith('mueve el mapa') ||
         normalized == 'chile' ||
         normalized == 'ubicación seleccionada' ||
         normalized == 'ubicacion seleccionada';

@@ -75,6 +75,18 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  void _limpiarUbicacion(bool esOrigen) {
+    setState(() {
+      if (esOrigen) {
+        _origenController.clear();
+        _origenData = null;
+      } else {
+        _destinoController.clear();
+        _destinoData = null;
+      }
+    });
+  }
+
   @override
   void dispose() {
     _origenController.dispose();
@@ -200,6 +212,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     hintText: "Origen",
                     controller: _origenController,
                     onTap: () => _abrirSelectorMapa(_origenController, true),
+                    onClear: () => _limpiarUbicacion(true),
                   ),
                   const Divider(height: 30),
 
@@ -208,6 +221,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     hintText: "Destino",
                     controller: _destinoController,
                     onTap: () => _abrirSelectorMapa(_destinoController, false),
+                    onClear: () => _limpiarUbicacion(false),
                   ),
                   const Divider(height: 30),
 
@@ -278,32 +292,36 @@ class _HomeScreenState extends State<HomeScreen> {
     required String hintText,
     TextEditingController? controller,
     VoidCallback? onTap,
+    VoidCallback? onClear,
   }) {
-    return GestureDetector(
-      onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Row(
-        children: [
-          Icon(icon, color: const Color(0xFF2BB8D1), size: 22),
-          const SizedBox(width: 15),
-          Expanded(
-            child: AbsorbPointer(
-              absorbing: onTap != null,
-              child: TextField(
-                controller: controller,
-                readOnly: onTap != null,
-                decoration: InputDecoration(
-                  hintText: hintText,
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.zero,
-                  hintStyle: const TextStyle(color: Colors.black87),
-                ),
-                style: const TextStyle(fontSize: 16, color: Colors.black87),
-              ),
+    return Row(
+      children: [
+        Icon(icon, color: const Color(0xFF2BB8D1), size: 22),
+        const SizedBox(width: 15),
+        Expanded(
+          child: TextField(
+            controller: controller,
+            readOnly: onTap != null,
+            onTap: onTap,
+            decoration: InputDecoration(
+              hintText: hintText,
+              border: InputBorder.none,
+              contentPadding: EdgeInsets.zero,
+              suffixIcon:
+                  onClear != null &&
+                      controller != null &&
+                      controller.text.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.close, color: Colors.grey),
+                      onPressed: onClear,
+                    )
+                  : null,
+              hintStyle: const TextStyle(color: Colors.black87),
             ),
+            style: const TextStyle(fontSize: 16, color: Colors.black87),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

@@ -33,6 +33,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   String _address = "Mueve el mapa o usa tu ubicación actual";
   List<dynamic> _predictions = [];
   bool _hasMapPosition = false;
+  bool _hasUserSelectedPosition = false;
   bool _isLoading = true;
   bool _isSearching = false;
   bool _suppressNextCameraIdle = false;
@@ -49,6 +50,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       _address = widget.initialLocation!.address;
       _searchController.text = widget.initialLocation!.address;
       _hasMapPosition = true;
+      _hasUserSelectedPosition = true;
       _isLoading = false;
     } else {
       _useCurrentLocation(silent: true);
@@ -116,6 +118,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     setState(() {
       _selected = position;
       _hasMapPosition = true;
+      _hasUserSelectedPosition = true;
       _isLoading = true;
     });
 
@@ -151,6 +154,7 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     if (_shouldIgnoreCameraUpdate) return;
 
     _selected = position.target;
+    _hasUserSelectedPosition = true;
     if (!_isLoading) {
       setState(() => _isLoading = true);
     }
@@ -196,6 +200,9 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     return false;
   }
 
+  bool get _hasUsableAddress =>
+      !GoogleMapsService.esDireccionGenerica(_address);
+
   void _onSearchChanged(String value) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
 
@@ -239,7 +246,31 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     );
   }
 
-  void _confirmSelection() {
+  Future<void> _confirmSelection() async {
+    if (!_hasUsableAddress) {
+      setState(() => _isLoading = true);
+      final address = await GoogleMapsService.obtenerDireccion(
+        _selected.latitude,
+        _selected.longitude,
+      );
+
+      if (!mounted) return;
+
+      if (GoogleMapsService.esDireccionGenerica(address)) {
+        setState(() => _isLoading = false);
+        _notify(
+          "No pudimos obtener una direccion exacta. Mueve el mapa o busca una direccion.",
+        );
+        return;
+      }
+
+      setState(() {
+        _address = address;
+        _searchController.text = address;
+        _isLoading = false;
+      });
+    }
+
     Navigator.pop(
       context,
       LocationData(
@@ -330,7 +361,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton.icon(
-                        onPressed: _isLoading ? null : _confirmSelection,
+                        onPressed:
+                            _isLoading ||
+                                (!_hasUsableAddress && !_hasUserSelectedPosition)
+                            ? null
+                            : _confirmSelection,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFFF05A28),
                           padding: const EdgeInsets.symmetric(vertical: 14),

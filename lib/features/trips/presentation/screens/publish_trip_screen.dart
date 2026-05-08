@@ -229,6 +229,24 @@ class _PublishTripScreenState extends State<PublishTripScreen> {
     }
   }
 
+  void _limpiarUbicacion(bool esOrigen) {
+    setState(() {
+      if (esOrigen) {
+        _origenController.clear();
+        _origenData = null;
+      } else {
+        _destinoController.clear();
+        _destinoData = null;
+      }
+      _precioRecomendado = null;
+      _precioPasajeroRecomendado = null;
+      _peajesEstimados = null;
+      _distanciaEstimadaKm = null;
+      _peajesDesdeApi = false;
+      _precioController.clear();
+    });
+  }
+
   Future<void> _publicarViaje() async {
     setState(() => _isPublishing = true);
 
@@ -245,6 +263,13 @@ class _PublishTripScreenState extends State<PublishTripScreen> {
           _selectedDate == null ||
           _selectedTime == null) {
         _mostrarMensaje("Faltan datos críticos para publicar");
+        setState(() => _isPublishing = false);
+        return;
+      }
+
+      if (GoogleMapsService.esDireccionGenerica(_origenData!.address) ||
+          GoogleMapsService.esDireccionGenerica(_destinoData!.address)) {
+        _mostrarMensaje("Selecciona origen y destino con una direccion real");
         setState(() => _isPublishing = false);
         return;
       }
@@ -505,6 +530,7 @@ class _PublishTripScreenState extends State<PublishTripScreen> {
                     hint: "Punto de partida",
                     controller: _origenController,
                     onTap: () => _abrirSelectorMapa(_origenController, true),
+                    onClear: () => _limpiarUbicacion(true),
                   ),
                   const SizedBox(height: 15),
                   _buildInputCard(
@@ -512,6 +538,7 @@ class _PublishTripScreenState extends State<PublishTripScreen> {
                     hint: "Punto de destino",
                     controller: _destinoController,
                     onTap: () => _abrirSelectorMapa(_destinoController, false),
+                    onClear: () => _limpiarUbicacion(false),
                   ),
                 ],
               ),
@@ -679,6 +706,7 @@ class _PublishTripScreenState extends State<PublishTripScreen> {
     bool isNumber = false,
     List<TextInputFormatter>? formatters,
     VoidCallback? onTap,
+    VoidCallback? onClear,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -696,6 +724,12 @@ class _PublishTripScreenState extends State<PublishTripScreen> {
         decoration: InputDecoration(
           border: InputBorder.none,
           prefixIcon: Icon(icon, color: const Color(0xFF2BB8D1)),
+          suffixIcon: onClear != null && controller.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.close, color: Colors.grey),
+                  onPressed: onClear,
+                )
+              : null,
           hintText: hint,
           hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
         ),
